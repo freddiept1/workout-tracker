@@ -1,10 +1,13 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   // GitHub Pages serves the app from /<repo-name>/; the deploy workflow sets BASE_PATH.
   base: process.env.BASE_PATH || '/',
   plugins: [
+    react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
@@ -25,5 +28,9 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts']
+  }
 });

@@ -296,6 +296,23 @@ dialog h2 { margin: 0; font-size: 1.25rem; }
 .segmented button { flex: 1; min-height: 38px; background: none; border: 0; color: var(--muted); }
 .segmented button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
 
+/* ---------- Notices ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 0.9rem;
+}
+
+.recovery { padding-top: calc(32px + var(--safe-top)); }
+.recovery p { margin: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
