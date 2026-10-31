@@ -2,26 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Workout Tracker</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="description" content="Log workouts, track progress, and reuse routines.">
+  <meta name="theme-color" content="#f5f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141517" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Workouts">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png">
 </head>
 <body>
   <header class="topbar">
-    <h1>Workout Tracker</h1>
-    <div class="backup">
-      <button type="button" class="ghost" id="exportBtn">Export</button>
-      <button type="button" class="ghost" id="importBtn">Import</button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
-    </div>
+    <h1 id="viewTitle">Log</h1>
+    <button type="button" class="icon-btn" id="settingsBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
   </header>
-
-  <nav class="tabs" role="tablist">
-    <button type="button" class="tab active" data-view="log">Log</button>
-    <button type="button" class="tab" data-view="history">History</button>
-    <button type="button" class="tab" data-view="progress">Progress</button>
-    <button type="button" class="tab" data-view="templates">Templates</button>
-  </nav>
 
   <main>
     <section id="view-log" class="view active"></section>
@@ -30,10 +29,47 @@
     <section id="view-templates" class="view"></section>
   </main>
 
+  <nav class="tabs">
+    <button type="button" class="tab active" data-view="log">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Log</span>
+    </button>
+    <button type="button" class="tab" data-view="history">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>History</span>
+    </button>
+    <button type="button" class="tab" data-view="progress">
+      <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span>Progress</span>
+    </button>
+    <button type="button" class="tab" data-view="templates">
+      <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Templates</span>
+    </button>
+  </nav>
+
+  <dialog id="settings">
+    <form method="dialog" class="stack">
+      <h2>Settings</h2>
+      <div>
+        <label>Weight unit</label>
+        <div class="segmented" id="unitPick">
+          <button type="button" data-unit="kg">kg</button>
+          <button type="button" data-unit="lb">lb</button>
+        </div>
+        <p class="hint">Changes the label only. Numbers you've logged aren't converted.</p>
+      </div>
+      <div>
+        <label>Backup</label>
+        <div class="row">
+          <button type="button" class="ghost grow" id="exportBtn">Export</button>
+          <button type="button" class="ghost grow" id="importBtn">Import</button>
+        </div>
+        <p class="hint">Your data lives only on this device. Export now and then to keep a copy.</p>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <button class="full">Done</button>
+    </form>
+  </dialog>
+
   <datalist id="exerciseList"></datalist>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/app.js"></script>
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
