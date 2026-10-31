@@ -53,7 +53,9 @@ function Recovery({ message, legacyRaw }: { message: string; legacyRaw: string |
   );
 }
 
-const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', templates: 'Templates' };
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const titles: Record<View, string> ={ log: 'Log', history: 'History', progress: 'Progress', templates: 'Templates' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   const settings = useSettings();
@@ -62,7 +64,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(
     migrated && migrated.sessions
-      ? `Your data was upgraded: ${migrated.sessions} workouts and ${migrated.sets} sets carried over.`
+      ? `Your data was upgraded: ${plural(migrated.sessions, 'workout')} and ${plural(migrated.sets, 'set')} carried over.`
       : null
   );
 
