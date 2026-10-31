@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workout Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Workout Tracker</h1>
+    <div class="backup">
+      <button type="button" class="ghost" id="exportBtn">Export</button>
+      <button type="button" class="ghost" id="importBtn">Import</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab active" data-view="log">Log</button>
+    <button type="button" class="tab" data-view="history">History</button>
+    <button type="button" class="tab" data-view="progress">Progress</button>
+    <button type="button" class="tab" data-view="templates">Templates</button>
+  </nav>
+
+  <main>
+    <section id="view-log" class="view active"></section>
+    <section id="view-history" class="view"></section>
+    <section id="view-progress" class="view"></section>
+    <section id="view-templates" class="view"></section>
+  </main>
+
+  <datalist id="exerciseList"></datalist>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
