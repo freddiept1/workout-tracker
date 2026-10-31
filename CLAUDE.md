@@ -22,7 +22,7 @@ There is no test suite or linter. Node/npm were installed with winget. If `npm` 
 - Exercise names match case-insensitively everywhere (Progress, last-time hints, autocomplete). Weight units are a label only; values are never converted.
 - Colors are CSS variables in `src/styles.css`, with dark-mode overrides. The chart reads them at render time and re-renders when the color scheme changes. Layout uses `env(safe-area-inset-*)` for the iPhone notch and home bar.
 - PWA: `vite-plugin-pwa` in `vite.config.js` generates the manifest and a Workbox service worker (`autoUpdate`) that precaches the build, so the app works offline. `base` comes from `BASE_PATH`.
-- Deploy: `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on every push to `main`.
+- Deploy: `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on every push to `main` (repo: github.com/freddiept1/workout-tracker, live at https://freddiept1.github.io/workout-tracker/). The repo's Settings → Pages → Source must be "GitHub Actions", or the `configure-pages` step fails. Pushing from the non-interactive shell can fail with a credential prompt error; push from a Terminal tab instead.
 
 ## Testing notes
 - The built-in browser pane can't register service workers, so offline/PWA behavior can't be checked there. Use headless Edge driven by `puppeteer-core`, installed in a scratch folder outside the repo, against `npm run preview`.
