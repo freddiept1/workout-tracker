@@ -9,7 +9,14 @@ describe('units', () => {
   });
 
   it('round-trips pounds through kg storage', () => {
-    for (const lb of [45, 97.5, 225, 315, 405, 500.5]) {
+    for (const lb of [45, 97.5, 225, 315, 325, 405, 500.5]) {
+      expect(formatWeight(toKg(lb, 'lb'), 'lb')).toBe(String(lb));
+    }
+  });
+
+  it('round-trips every 0.25 lb step up to 1000 lb exactly', () => {
+    for (let q = 0; q <= 4000; q++) {
+      const lb = q / 4;
       expect(formatWeight(toKg(lb, 'lb'), 'lb')).toBe(String(lb));
     }
   });

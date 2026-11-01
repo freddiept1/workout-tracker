@@ -1,12 +1,13 @@
 // All reads and writes go through here; UI code never touches Dexie tables directly.
+import { finishPlan, toSetEntry, upgradeDraftV1 } from '../lib/draft';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
-import { parseNumber, toKg } from '../lib/units';
 import type { TrackerDB } from './db';
 import { LEGACY_KEY, isLegacyData, migrateLegacy, type MigrationResult } from './migrateLegacy';
-import type { Draft, Exercise, MigrationInfo, Session, SessionExercise, SetEntry, Settings, Template, Unit } from './types';
-import { ME } from './types';
+import { ensureSeedExercises } from './seed';
+import type { Draft, DraftV1, Exercise, MigrationInfo, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
+import { DEFAULT_SETTINGS, ME } from './types';
 
-export const DEFAULT_SETTINGS: Settings = { unit: 'kg' };
+export { DEFAULT_SETTINGS };
 
 const STARTER_TEMPLATES: [string, string[]][] = [
   ['Push', ['Bench Press', 'Overhead Press', 'Incline Dumbbell Press', 'Triceps Pushdown']],
@@ -19,29 +20,32 @@ export type StartupResult =
   | { status: 'error'; message: string; legacyRaw: string | null };
 
 /**
- * Runs once per device: copies the old localStorage data into IndexedDB (leaving the original
- * untouched as a fallback), or seeds starter templates on a fresh install.
+ * Runs on every launch. Once per device it copies the old localStorage data into IndexedDB (leaving
+ * the original untouched as a fallback), or seeds starter templates on a fresh install. Every launch
+ * adds any built-in exercises that are missing.
  */
 export async function startup(db: TrackerDB, storage: Pick<Storage, 'getItem'> | null): Promise<StartupResult> {
   let legacyRaw: string | null = null;
   try {
-    if (await db.meta.get('migration')) return { status: 'ready', migrated: null };
-    legacyRaw = storage?.getItem(LEGACY_KEY) ?? null;
-    const now = nowIso();
-    const result: MigrationResult = legacyRaw
-      ? migrateLegacy(JSON.parse(legacyRaw), now, newId)
-      : starterData(now);
-    const info: MigrationInfo = {
-      from: legacyRaw ? 'localStorage' : 'fresh',
-      at: now,
-      sourceVersion: result.sourceVersion,
-      sessions: result.sessions.length,
-      sets: result.setCount,
-      exercises: result.exercises.length,
-      templates: result.templates.length
-    };
-    const wrote = await writeAll(db, result, info, { onlyIfNotMigrated: true });
-    return { status: 'ready', migrated: wrote && legacyRaw ? info : null };
+    let migrated: MigrationInfo | null = null;
+    if (!(await db.meta.get('migration'))) {
+      legacyRaw = storage?.getItem(LEGACY_KEY) ?? null;
+      const now = nowIso();
+      const result: MigrationResult = legacyRaw ? migrateLegacy(JSON.parse(legacyRaw), now, newId) : starterData(now);
+      const info: MigrationInfo = {
+        from: legacyRaw ? 'localStorage' : 'fresh',
+        at: now,
+        sourceVersion: result.sourceVersion,
+        sessions: result.sessions.length,
+        sets: result.setCount,
+        exercises: result.exercises.length,
+        templates: result.templates.length
+      };
+      const wrote = await writeAll(db, result, info, { onlyIfNotMigrated: true });
+      if (wrote && legacyRaw) migrated = info;
+    }
+    await ensureSeedExercises(db);
+    return { status: 'ready', migrated };
   } catch (err) {
     return { status: 'error', message: err instanceof Error ? err.message : String(err), legacyRaw };
   }
@@ -79,12 +83,27 @@ async function writeAll(db: TrackerDB, data: MigrationResult, info: MigrationInf
 
 const alive = <T extends { deletedAt: string | null }>(x: T) => !x.deletedAt;
 
+/** Stored settings over the defaults, so settings added in later versions always have a value. */
 export async function getSettings(db: TrackerDB): Promise<Settings> {
-  return ((await db.meta.get('settings'))?.value as Settings) ?? DEFAULT_SETTINGS;
+  const stored = ((await db.meta.get('settings'))?.value ?? {}) as Partial<Settings>;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    equipment: { ...DEFAULT_SETTINGS.equipment, ...stored.equipment }
+  };
 }
 
+/** The in-progress workout. A Phase 0 draft is upgraded (and its exercises created) on first read. */
 export async function getDraft(db: TrackerDB): Promise<Draft | null> {
-  return ((await db.meta.get('draft'))?.value as Draft | null) ?? null;
+  const value = (await db.meta.get('draft'))?.value as Draft | DraftV1 | null | undefined;
+  if (!value) return null;
+  if ('v' in value && value.v === 2) return value;
+  const { draft, names } = upgradeDraftV1(value as DraftV1);
+  await db.transaction('rw', [db.exercises, db.meta], async () => {
+    await ensureExercises(db, names);
+    await db.meta.put({ key: 'draft', value: draft });
+  });
+  return draft;
 }
 
 /** Sessions for the current lifter, newest first. */
@@ -108,33 +127,32 @@ export async function listTemplates(db: TrackerDB): Promise<Template[]> {
 
 export interface LastPerformance {
   date: string;
-  sets: SetEntry[];
+  sets: SetEntry[]; // every set, warm-ups included, in order
 }
 
-/** Sets from the most recent session that included this exercise (warm-ups left out). */
+/** Sets from the most recent session that included this exercise. */
 export async function lastPerformance(db: TrackerDB, exerciseId: string): Promise<LastPerformance | null> {
   const sessions = await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray();
   const latest = sessions.filter((s) => s.athleteId === ME).sort(newestFirst)[0];
   if (!latest) return null;
-  const sets = latest.exercises
-    .filter((e) => e.exerciseId === exerciseId)
-    .flatMap((e) => e.sets)
-    .filter((s) => s.type !== 'warmup' && s.reps !== null);
+  const sets = latest.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets);
   return sets.length ? { date: latest.date, sets } : null;
 }
 
 // ---------- Writes ----------
 
-export async function setUnit(db: TrackerDB, unit: Unit) {
+export async function updateSettings(db: TrackerDB, patch: Partial<Settings>) {
   const settings = await getSettings(db);
-  await db.meta.put({ key: 'settings', value: { ...settings, unit } });
+  await db.meta.put({ key: 'settings', value: { ...settings, ...patch } });
 }
+
+export const setUnit = (db: TrackerDB, unit: Settings['unit']) => updateSettings(db, { unit });
 
 export async function saveDraft(db: TrackerDB, draft: Draft | null) {
   await db.meta.put({ key: 'draft', value: draft });
 }
 
-/** Creates any exercises that don't exist yet (by name) and returns their ids. */
+/** Creates any exercises that don't exist yet (by name, as Strength) and returns their ids. */
 async function ensureExercises(db: TrackerDB, names: string[]): Promise<string[]> {
   const now = nowIso();
   const ids: string[] = [];
@@ -142,7 +160,7 @@ async function ensureExercises(db: TrackerDB, names: string[]): Promise<string[]
     const name = raw.trim();
     const id = exerciseIdFor(name);
     const existing = await db.exercises.get(id);
-    if (!existing) await db.exercises.put({ id, name, isCustom: true, createdAt: now, updatedAt: now, deletedAt: null });
+    if (!existing) await db.exercises.put({ id, name, isCustom: true, tracking: 'strength', createdAt: now, updatedAt: now, deletedAt: null });
     else if (existing.deletedAt) await db.exercises.put({ ...existing, deletedAt: null, updatedAt: now });
     ids.push(id);
   }
@@ -150,35 +168,49 @@ async function ensureExercises(db: TrackerDB, names: string[]): Promise<string[]
 }
 
 /**
- * Turns the draft into a saved session. Sets without reps and exercises without a name or sets are
- * left out. Returns null (and saves nothing) if there is nothing to save.
+ * Creates a custom exercise, or returns the existing one with that name (reviving it if deleted;
+ * an existing exercise keeps its tracking type so its history still makes sense).
  */
-export async function finishDraft(db: TrackerDB, draft: Draft): Promise<Session | null> {
-  const now = nowIso();
-  const kept = draft.exercises
-    .map((ex) => ({
-      name: ex.name.trim(),
-      sets: ex.sets
-        .map((s) => ({ s, reps: parseNumber(s.reps), weight: parseNumber(s.weight) }))
-        .filter(({ reps }) => reps !== null && reps > 0)
-    }))
-    .filter((ex) => ex.name && ex.sets.length);
-  if (!kept.length) return null;
+export async function createExercise(db: TrackerDB, input: { name: string; tracking: TrackingMode; unilateral: boolean }): Promise<Exercise> {
+  const name = input.name.trim();
+  const id = exerciseIdFor(name);
+  return db.transaction('rw', db.exercises, async () => {
+    const now = nowIso();
+    const existing = await db.exercises.get(id);
+    if (existing) {
+      if (existing.deletedAt) await db.exercises.update(id, { deletedAt: null, updatedAt: now });
+      return { ...existing, deletedAt: null };
+    }
+    const ex: Exercise = { id, name, isCustom: true, tracking: input.tracking, unilateral: input.unilateral, createdAt: now, updatedAt: now, deletedAt: null };
+    await db.exercises.put(ex);
+    return ex;
+  });
+}
 
+export async function updateExercise(db: TrackerDB, id: string, patch: Partial<Pick<Exercise, 'restSec' | 'tracking' | 'unilateral' | 'defaultDistanceM'>>) {
+  await db.exercises.update(id, { ...patch, updatedAt: nowIso() });
+}
+
+/**
+ * Turns the draft into a saved session: ticked sets, plus filled-in unticked sets when
+ * `includeUnticked`. Exercises left with no sets are dropped. Returns null if nothing would be saved.
+ */
+export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked = true): Promise<Session | null> {
+  const now = nowIso();
   return db.transaction('rw', [db.exercises, db.sessions, db.meta], async () => {
-    const ids = await ensureExercises(db, kept.map((e) => e.name));
-    const exercises: SessionExercise[] = kept.map((ex, i) => ({
-      id: newId(),
-      exerciseId: ids[i],
-      sets: ex.sets.map(({ s, reps, weight }) => ({
-        id: s.id,
-        type: s.type,
-        weightKg: weight === null ? 0 : toKg(weight, draft.unit),
-        reps,
-        rpe: null,
-        completedAt: now
+    const exercises = new Map((await db.exercises.bulkGet(draft.exercises.map((e) => e.exerciseId))).filter(Boolean).map((e) => [e!.id, e!]));
+    const plan = finishPlan(draft, exercises, includeUnticked);
+    const kept: SessionExercise[] = draft.exercises
+      .map((ex) => ({
+        id: ex.id,
+        exerciseId: ex.exerciseId,
+        supersetGroup: ex.supersetGroup,
+        restSec: ex.restSec,
+        notes: ex.notes.trim() || undefined,
+        sets: ex.sets.filter((s) => plan.include(ex, s)).map((s) => toSetEntry(s, exercises.get(ex.exerciseId), draft.unit, now))
       }))
-    }));
+      .filter((ex) => ex.sets.length);
+    if (!kept.length) return null;
     const session: Session = {
       id: newId(),
       athleteId: ME,
@@ -188,8 +220,8 @@ export async function finishDraft(db: TrackerDB, draft: Draft): Promise<Session 
       templateId: draft.templateId,
       notes: draft.notes.trim(),
       source: 'live',
-      exercises,
-      exerciseIds: [...new Set(ids)],
+      exercises: kept,
+      exerciseIds: [...new Set(kept.map((e) => e.exerciseId))],
       createdAt: now,
       updatedAt: now,
       deletedAt: null
@@ -231,7 +263,8 @@ export async function deleteTemplate(db: TrackerDB, id: string) {
 
 // ---------- Backup ----------
 
-export const EXPORT_FORMAT = 3;
+/** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft). Older formats still import. */
+export const EXPORT_FORMAT = 4;
 
 export interface ExportFile {
   app: 'workout-tracker';
@@ -241,7 +274,7 @@ export interface ExportFile {
   exercises: Exercise[];
   sessions: Session[];
   templates: Template[];
-  draft: Draft | null;
+  draft: Draft | DraftV1 | null;
 }
 
 /** Everything, including soft-deleted records, so a restore is exact. */
@@ -268,11 +301,11 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
     if (f.format > EXPORT_FORMAT) throw new Error('This backup is from a newer version of the app. Update the app first.');
     if (!Array.isArray(f.sessions) || !Array.isArray(f.exercises)) throw new Error('This backup file is incomplete.');
     data = {
-      settings: f.settings ?? DEFAULT_SETTINGS,
+      settings: { ...DEFAULT_SETTINGS, ...f.settings },
       exercises: f.exercises,
       sessions: f.sessions,
       templates: f.templates ?? [],
-      draft: f.draft ?? null,
+      draft: (f.draft ?? null) as Draft | null, // a Phase 0 draft is upgraded by getDraft()
       sourceVersion: f.format,
       setCount: f.sessions.reduce((n, s) => n + s.exercises.reduce((m, e) => m + e.sets.length, 0), 0)
     };
@@ -286,5 +319,6 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
     from: 'fresh', at: now, sourceVersion: data.sourceVersion, sessions: data.sessions.length,
     sets: data.setCount, exercises: data.exercises.length, templates: data.templates.length
   });
+  await ensureSeedExercises(db);
   return { sessions: data.sessions.filter((s) => !s.deletedAt).length };
 }

@@ -1,13 +1,14 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { topSetsByDate } from '../lib/progress';
+import { blankSet } from '../lib/draft';
+import { bestByDate, metricFor } from '../lib/progress';
 import { TrackerDB } from './db';
 import { LEGACY_KEY } from './migrateLegacy';
 import {
-  deleteSession, exportAll, finishDraft, getDraft, getSettings, importAll, lastPerformance,
-  listSessions, listTemplates, saveTemplate, setUnit, startup
+  createExercise, deleteSession, exportAll, finishDraft, getDraft, getSettings, importAll, lastPerformance,
+  listSessions, listTemplates, saveTemplate, setUnit, startup, updateExercise
 } from './repo';
-import type { Draft } from './types';
+import type { Draft, DraftSet, DraftV1 } from './types';
 
 const legacy = {
   version: 2,
@@ -26,6 +27,7 @@ const storageWith = (value: unknown) => ({
 
 let db: TrackerDB;
 let dbCount = 0;
+const saveDraftRaw = (d: DraftV1) => db.meta.put({ key: 'draft', value: d });
 beforeEach(() => {
   db = new TrackerDB(`test-${++dbCount}`);
 });
@@ -64,12 +66,12 @@ describe('startup migration', () => {
 describe('logging', () => {
   beforeEach(() => startup(db, storageWith(legacy)));
 
-  const draft = (sets: [string, string][], name = 'squat'): Draft => ({
-    unit: 'kg', date: '2026-10-31', startedAt: '2026-10-31T10:00:00.000Z', templateId: null, notes: ' ',
-    exercises: [
-      { id: 'e1', name, sets: sets.map(([reps, weight], i) => ({ id: `s${i}`, type: 'working', reps, weight })) },
-      { id: 'e2', name: '', sets: [{ id: 'x', type: 'working', reps: '5', weight: '50' }] }
-    ]
+  const set = (p: Partial<DraftSet>): DraftSet => ({ ...blankSet(), done: true, ...p });
+  const draft = (exercises: [string, Partial<DraftSet>[]][]): Draft => ({
+    v: 2, unit: 'kg', date: '2026-10-31', startedAt: '2026-10-31T10:00:00.000Z', templateId: null, notes: ' ', rest: null,
+    exercises: exercises.map(([exerciseId, sets], i) => ({
+      id: `e${i}`, exerciseId, supersetGroup: null, restSec: null, notes: '', sets: sets.map(set)
+    }))
   });
 
   it('shows the most recent session as "last time"', async () => {
@@ -78,29 +80,97 @@ describe('logging', () => {
     expect(last?.sets.map((s) => s.weightKg)).toEqual([135, 140]);
   });
 
-  it('saves a finished workout, dropping empty sets and unnamed exercises', async () => {
-    const s = await finishDraft(db, draft([['5', '142,5'], ['', '100'], ['3', '']]));
-    expect(s?.exercises).toHaveLength(1);
-    expect(s?.exercises[0].exerciseId).toBe('squat');
-    expect(s?.exercises[0].sets.map((x) => [x.reps, x.weightKg])).toEqual([[5, 142.5], [3, 0]]);
+  it('saves ticked sets with RPE, type, tempo and notes, dropping empty ones', async () => {
+    const s = await finishDraft(db, draft([['squat', [
+      { type: 'warmup', reps: '5', weight: '60' },
+      { reps: '5', weight: '142,5', rpe: 8.5, tempo: '3-1-X-0', notes: ' belt ' },
+      { reps: '', weight: '100' }
+    ]]]));
+    expect(s?.exercises[0].sets.map((x) => [x.type, x.reps, x.weightKg, x.rpe])).toEqual([['warmup', 5, 60, null], ['working', 5, 142.5, 8.5]]);
+    expect(s?.exercises[0].sets[1]).toMatchObject({ tempo: '3-1-X-0', notes: 'belt' });
     expect(s?.source).toBe('live');
     expect(await getDraft(db)).toBeNull();
     expect((await lastPerformance(db, 'squat'))?.date).toBe('2026-10-31');
   });
 
-  it('creates new exercises on the fly', async () => {
-    await finishDraft(db, draft([['10', '60']], 'Hack Squat'));
-    expect((await db.exercises.get('hack-squat'))?.name).toBe('Hack Squat');
+  it('leaves out filled-in sets that were never ticked, if asked to', async () => {
+    const d = draft([['squat', [{ reps: '5', weight: '140' }, { reps: '5', weight: '140', done: false }]]]);
+    expect((await finishDraft(db, d, false))?.exercises[0].sets).toHaveLength(1);
   });
 
-  it('saves nothing when no set has reps', async () => {
-    expect(await finishDraft(db, draft([['', '100']]))).toBeNull();
+  it('keeps unticked sets by default', async () => {
+    const d = draft([['squat', [{ reps: '5', weight: '140', done: false }]]]);
+    expect((await finishDraft(db, d))?.exercises[0].sets[0].completedAt).toBeTruthy();
+  });
+
+  it('saves nothing when no set has data', async () => {
+    expect(await finishDraft(db, draft([['squat', [{ reps: '', weight: '100' }]]]))).toBeNull();
     expect(await listSessions(db)).toHaveLength(2);
   });
 
   it('stores pounds as kg', async () => {
-    const s = await finishDraft(db, { ...draft([['5', '225']]), unit: 'lb' });
+    const s = await finishDraft(db, { ...draft([['squat', [{ reps: '5', weight: '225' }]]]), unit: 'lb' });
     expect(s?.exercises[0].sets[0].weightKg).toBeCloseTo(102.058, 3);
+  });
+
+  it('saves athletic sets as work done plus effort', async () => {
+    const s = await finishDraft(db, draft([
+      ['20-m-sprint', [{ distance: '20', reps: '4', effort: 95 }, { distance: '20', reps: '' }]],
+      ['countermovement-jump', [{ reps: '5', effort: 100, rpe: 9 }]],
+      ['single-leg-hop', [{ reps: '3', side: 'L', effort: 90 }, { reps: '3', side: 'R', effort: 90 }]],
+      ['medicine-ball-chest-pass', [{ weight: '4', reps: '6', effort: 100 }]],
+      ['sled-push', [{ weight: '120', distance: '20', effort: 90 }]]
+    ]));
+    const [sprint, cmj, hop, pass, sled] = s!.exercises;
+    expect(sprint.sets).toHaveLength(1);
+    expect(sprint.sets[0]).toMatchObject({ distanceM: 20, reps: 4, effortPct: 95, weightKg: null, rpe: null });
+    expect(cmj.sets[0]).toMatchObject({ reps: 5, effortPct: 100, rpe: null }); // athletic work takes effort, not RPE
+    expect(hop.sets.map((x) => [x.reps, x.side])).toEqual([[3, 'L'], [3, 'R']]);
+    expect(pass.sets[0]).toMatchObject({ weightKg: 4, reps: 6, effortPct: 100 });
+    expect(sled.sets[0]).toMatchObject({ weightKg: 120, distanceM: 20, reps: null });
+  });
+
+  it('keeps RPE for lifts and drops effort', async () => {
+    const s = await finishDraft(db, draft([['squat', [{ reps: '5', weight: '140', rpe: 8, effort: 90 }]]]));
+    expect(s!.exercises[0].sets[0]).toMatchObject({ rpe: 8, effortPct: null });
+  });
+
+  it('upgrades a Phase 0 in-progress workout on first read', async () => {
+    await saveDraftRaw({
+      unit: 'kg', date: '2026-10-31', startedAt: '2026-10-31T10:00:00.000Z', templateId: null, notes: 'n',
+      exercises: [
+        { id: 'a', name: 'Hack Squat', sets: [{ id: 's1', type: 'working', weight: '100', reps: '8' }] },
+        { id: 'b', name: '', sets: [{ id: 's2', type: 'working', weight: '', reps: '' }] }
+      ]
+    });
+    const d = await getDraft(db);
+    expect(d).toMatchObject({ v: 2, notes: 'n', rest: null });
+    expect(d!.exercises).toHaveLength(1);
+    expect(d!.exercises[0]).toMatchObject({ exerciseId: 'hack-squat', supersetGroup: null });
+    expect(d!.exercises[0].sets[0]).toMatchObject({ weight: '100', reps: '8', done: false });
+    expect((await db.exercises.get('hack-squat'))?.name).toBe('Hack Squat');
+    expect((await db.meta.get('draft'))?.value).toMatchObject({ v: 2 });
+  });
+
+  it('adds the athletic exercises, keeping any the lifter already made', async () => {
+    expect((await db.exercises.get('10-m-sprint'))).toMatchObject({ tracking: 'sprint', defaultDistanceM: 10 });
+    expect((await db.exercises.get('single-leg-hop'))).toMatchObject({ tracking: 'jump', unilateral: true });
+    await createExercise(db, { name: 'Sled Push', tracking: 'carry', unilateral: false });
+    const other = new TrackerDB(`test-${++dbCount}`);
+    await startup(other, storageWith({ ...legacy, workouts: [{ id: 'b', date: '2026-10-01', exercises: [{ name: 'Box Jump', sets: [{ reps: 5, weight: 0 }] }] }] }));
+    expect((await other.exercises.get('box-jump'))?.tracking).toBe('strength'); // their own, untouched
+  });
+
+  it('creates custom exercises, returning the existing one for a duplicate name', async () => {
+    const ex = await createExercise(db, { name: 'Banded Jump', tracking: 'jump', unilateral: false });
+    expect(ex).toMatchObject({ id: 'banded-jump', tracking: 'jump', isCustom: true });
+    const again = await createExercise(db, { name: 'banded jump', tracking: 'strength', unilateral: false });
+    expect(again.tracking).toBe('jump');
+  });
+
+  it('remembers rest times per exercise', async () => {
+    await updateExercise(db, 'squat', { restSec: 240 });
+    expect((await db.exercises.get('squat'))?.restSec).toBe(240);
   });
 
   it('hides deleted sessions everywhere', async () => {
@@ -110,10 +180,15 @@ describe('logging', () => {
   });
 
   it('charts the heaviest set per day', async () => {
-    expect(topSetsByDate(await listSessions(db), 'squat')).toEqual([
-      { date: '2026-10-17', weightKg: 130 },
-      { date: '2026-10-24', weightKg: 140 }
+    expect(bestByDate(await listSessions(db), 'squat', metricFor('strength', 'kg'))).toEqual([
+      { date: '2026-10-17', value: 130 },
+      { date: '2026-10-24', value: 140 }
     ]);
+  });
+
+  it('fills in default settings for older saved settings', async () => {
+    await db.meta.put({ key: 'settings', value: { unit: 'lb' } });
+    expect(await getSettings(db)).toMatchObject({ unit: 'lb', restSound: true, equipment: { kg: { bar: 20 }, lb: { bar: 45 } } });
   });
 
   it('edits templates', async () => {

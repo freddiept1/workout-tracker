@@ -73,9 +73,13 @@ describe('migrateLegacy', () => {
   });
 
   it('carries the in-progress workout over exactly as typed', () => {
-    expect(r.draft).toMatchObject({ unit: 'kg', date: '2026-10-31', templateId: 'tpl-legs', notes: 'heavy day' });
-    expect(r.draft!.exercises[0].sets.map((s) => [s.reps, s.weight])).toEqual([['5', '140'], ['', '']]);
-    expect(r.draft!.exercises[1].name).toBe('');
+    expect(r.draft).toMatchObject({ v: 2, unit: 'kg', date: '2026-10-31', templateId: 'tpl-legs', notes: 'heavy day', rest: null });
+    expect(r.draft!.exercises[0].exerciseId).toBe('squat');
+    expect(r.draft!.exercises[0].sets.map((s) => [s.reps, s.weight, s.done])).toEqual([['5', '140', false], ['', '', false]]);
+  });
+
+  it('drops an unnamed, empty exercise from the in-progress workout', () => {
+    expect(r.draft!.exercises).toHaveLength(1);
   });
 
   it('converts pound data to kg', () => {

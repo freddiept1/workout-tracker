@@ -6,23 +6,21 @@ Every record has `id`, `createdAt`, `updatedAt` and `deletedAt` (soft delete), s
 
 Types live in `src/db/types.ts`, tables and indexes in `src/db/db.ts`.
 
-## Built (Phase 0)
+## Built (Phases 0–1)
 
 | Table | Key fields | Notes |
 | --- | --- | --- |
-| `exercises` | id (slug of name, e.g. `bench-press`), name, isCustom, parentId, muscles[{muscle, pct}], pattern, equipment, mechanic, favourite | Tag fields are filled by the Phase 2 library. Slug ids let the library match exercises migrated from old data |
+| `exercises` | id (slug of name, e.g. `bench-press`), name, isCustom, **tracking** (strength/reps/sprint/jump/throw/carry), **unilateral**, **restSec**, **defaultDistanceM**, parentId, muscles[{muscle, pct}], pattern, equipment, mechanic, favourite | `tracking` decides a set's fields (missing = strength). Built-in athletic exercises come from `src/db/seed.ts`. Muscle/pattern tags are filled by the Phase 2 library. Slug ids let the library match exercises migrated from old data |
 | `sessions` | id, athleteId, date, startedAt, endedAt, templateId, programDayId, notes, sessionRpe, source (live/migrated/imported), exercises[], exerciseIds[] | Exercises and sets are nested inside the session (one record per workout), so a session is saved atomically. `exerciseIds` is a multi-entry index for "last time" lookups |
-| ↳ session exercise | id, exerciseId, supersetGroup, restSec, notes, sets[] | |
-| ↳ set | id, type (warmup/working/top/backoff/amrap/drop/failure), weightKg, reps, rpe, tempo, notes, completedAt | `completedAt` is set only when ticked off live. History migrated from the old app has `null` here, which is how XP will tell live work from back-filled history |
+| ↳ session exercise | id, exerciseId, supersetGroup, restSec, notes, sets[] | Exercises sharing a `supersetGroup` are a superset/circuit |
+| ↳ set | id, type (warmup/working/top/backoff/amrap/drop/failure), weightKg, reps, rpe, **distanceM**, **effortPct**, **side** (L/R), tempo, notes, completedAt | Lifts use weight/reps/RPE. Athletic work uses distance/reps/load plus `effortPct` (% of max), never measured results. `completedAt` is set when ticked off live (or at finish for filled-in unticked sets). History migrated from the old app has `null` here, which is how XP will tell live work from back-filled history |
 | `templates` | id, athleteId, name, order, exercises[{exerciseId}] | |
-| `meta` | key → value | `settings` ({unit}), `draft` (the in-progress workout exactly as typed), `migration` (when/what was migrated) |
+| `meta` | key → value | `settings` ({unit, restSound, equipment {kg, lb: {bar, collar, plates[]}}}), `draft` (the in-progress workout exactly as typed, v2: per-set done/completedAt, rest timer endsAt), `migration` (when/what was migrated) |
 
 ## Planned
 
 | Phase | Table | Key fields |
 | --- | --- | --- |
-| 1 | (fields on sets/session exercises) | rpe, tempo, notes, set types, supersetGroup, restSec, per-exercise rest default |
-| 1 | `meta.equipment` | bar weight, available plates (kg/lb), collars |
 | 2 | `exercises` (seeded) | ~150 tagged exercises; `favourite`, `parentId` for variations |
 | 3 | (derived, not stored) | e1RM, PRs, rep-maxes, weekly sets per muscle are computed from sessions |
 | 3 | `prs` | id, athleteId, exerciseId, kind (weight/reps/e1rm/volume), value, sessionId, setId, achievedAt; recorded so celebrations fire once |

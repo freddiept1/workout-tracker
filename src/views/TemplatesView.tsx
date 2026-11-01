@@ -36,6 +36,7 @@ export function TemplatesView() {
         </div>
         <div>
           <label htmlFor="tplExercises">Exercises (one per line)</label>
+          <p className="hint">Names you've used before (or built-in ones like “20 m Sprint”) keep their type. New names are added as strength lifts.</p>
           <textarea
             id="tplExercises" rows={6} placeholder={'Squat\nBench Press'} autoCapitalize="words" value={editing.exercises}
             onChange={(e) => setEditing({ ...editing, exercises: e.target.value })}

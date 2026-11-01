@@ -3,7 +3,7 @@ import { deleteSession } from '../db/repo';
 import type { Unit } from '../db/types';
 import { useExerciseMap, useSessions, useTemplates } from '../hooks';
 import { longDate } from '../lib/dates';
-import { formatWeight } from '../lib/units';
+import { formatSet, modeOf, setBadge } from '../lib/tracking';
 
 export function HistoryView({ unit }: { unit: Unit }) {
   const sessions = useSessions();
@@ -37,16 +37,23 @@ export function HistoryView({ unit }: { unit: Unit }) {
               </svg>
             </summary>
             <div className="workout-detail">
-              {s.exercises.map((ex) => (
-                <div key={ex.id}>
-                  <div className="card-title">{exercises.get(ex.exerciseId)?.name ?? ex.exerciseId}</div>
-                  <div className="set-chips">
-                    {ex.sets.map((set) => (
-                      <span className="chip" key={set.id}>{set.reps} × {formatWeight(set.weightKg, unit) || 0} {unit}</span>
-                    ))}
+              {s.exercises.map((ex) => {
+                const exercise = exercises.get(ex.exerciseId);
+                return (
+                  <div key={ex.id}>
+                    <div className="card-title">{exercise?.name ?? ex.exerciseId}</div>
+                    {ex.notes && <p className="exercise-note">{ex.notes}</p>}
+                    <div className="set-chips">
+                      {ex.sets.map((set, i) => (
+                        <span className={'chip' + (set.type === 'warmup' ? ' warm' : '')} key={set.id} title={set.notes}>
+                          {set.type !== 'working' && <b className="chip-type">{setBadge(ex.sets, i)}</b>}
+                          {formatSet(set, modeOf(exercise), unit)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {s.notes && <p className="muted">{s.notes}</p>}
               <button
                 type="button" className="danger small"

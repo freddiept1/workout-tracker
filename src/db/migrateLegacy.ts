@@ -1,10 +1,11 @@
 // Converts the old localStorage data (schema v1/v2, key `workoutTracker.v1`) into the IndexedDB model.
 // Pure function: no storage access, so it can be tested directly. Nothing is dropped: unknown
 // exercise names become custom exercises, and odd values are kept rather than discarded.
+import { upgradeDraftV1 } from '../lib/draft';
 import { exerciseIdFor } from '../lib/ids';
 import { parseNumber, toKg } from '../lib/units';
 import type { Draft, Exercise, Session, SessionExercise, Settings, Template, Unit } from './types';
-import { ME } from './types';
+import { DEFAULT_SETTINGS, ME } from './types';
 
 export const LEGACY_KEY = 'workoutTracker.v1';
 
@@ -54,7 +55,7 @@ export function migrateLegacy(raw: unknown, now: string, newId: () => string): M
   function exerciseFor(nameRaw: unknown): string {
     const name = str(nameRaw).trim() || 'Unnamed exercise';
     const id = exerciseIdFor(name);
-    if (!exercises.has(id)) exercises.set(id, { id, name, isCustom: true, ...base() });
+    if (!exercises.has(id)) exercises.set(id, { id, name, isCustom: true, tracking: 'strength', ...base() });
     return id;
   }
 
@@ -110,7 +111,7 @@ export function migrateLegacy(raw: unknown, now: string, newId: () => string): M
   let draft: Draft | null = null;
   if (raw.draft && typeof raw.draft === 'object') {
     const d = raw.draft;
-    draft = {
+    const upgraded = upgradeDraftV1({
       unit,
       date: str(d.date),
       startedAt: now,
@@ -121,11 +122,13 @@ export function migrateLegacy(raw: unknown, now: string, newId: () => string): M
         name: str(ex.name),
         sets: (ex.sets ?? []).map((s) => ({ id: newId(), type: 'working' as const, weight: str(s.weight), reps: str(s.reps) }))
       }))
-    };
+    });
+    upgraded.names.forEach(exerciseFor);
+    draft = upgraded.draft;
   }
 
   return {
-    settings: { unit },
+    settings: { ...DEFAULT_SETTINGS, unit },
     exercises: [...exercises.values()],
     sessions,
     templates,

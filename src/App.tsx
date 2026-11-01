@@ -1,10 +1,10 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState, type ReactNode } from 'react';
 import { db } from './db/db';
-import { getDraft, saveDraft, startup, type StartupResult } from './db/repo';
-import type { Draft, MigrationInfo, Unit } from './db/types';
-import { useSettings } from './hooks';
+import { getDraft, getSettings, saveDraft, startup, type StartupResult } from './db/repo';
+import type { Draft, MigrationInfo } from './db/types';
+import { convertDraftUnit } from './lib/draft';
 import { saveFile } from './lib/saveFile';
-import { formatWeight, parseNumber, toKg } from './lib/units';
 import { HistoryView } from './views/HistoryView';
 import { LogView } from './views/LogView';
 import { ProgressView } from './views/ProgressView';
@@ -58,7 +58,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const titles: Record<View, string> ={ log: 'Log', history: 'History', progress: 'Progress', templates: 'Templates' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
-  const settings = useSettings();
+  // undefined until loaded: don't render (or convert the draft's units) against default settings.
+  const settings = useLiveQuery(() => getSettings(db), []);
   const [view, setView] = useState<View>('log');
   const [draft, setDraftState] = useState<Draft | null | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -79,9 +80,9 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   };
 
   // If the unit setting changes mid-workout, convert what's been typed so far.
-  const unit = settings.unit;
+  const unit = settings?.unit;
   useEffect(() => {
-    if (draft && draft.unit !== unit) setDraft(convertDraft(draft, unit));
+    if (draft && unit && draft.unit !== unit) setDraft(convertDraftUnit(draft, unit));
   }, [unit, draft]);
 
   function show(v: View) {
@@ -89,13 +90,15 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
     window.scrollTo(0, 0);
   }
 
-  if (draft === undefined) return null;
+  if (draft === undefined || !settings || !unit) return null;
   const title = view === 'log' && draft ? 'Workout' : titles[view];
 
   return (
     <>
       <header className="topbar">
         <h1>{title}</h1>
+        {/* Screens can put their own buttons here (Log puts "Finish" during a workout). */}
+        <div id="header-slot" className="header-slot" />
         <button type="button" className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
@@ -112,7 +115,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           </div>
         )}
         <section className="view active" key={view}>
-          {view === 'log' && <LogView draft={draft} unit={unit} onChange={setDraft} onSaved={() => show('history')} />}
+          {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={() => show('history')} />}
           {view === 'history' && <HistoryView unit={unit} />}
           {view === 'progress' && <ProgressView unit={unit} />}
           {view === 'templates' && <TemplatesView />}
@@ -132,7 +135,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
 
       <SettingsDialog
         open={settingsOpen}
-        unit={unit}
+        settings={settings}
         onClose={() => setSettingsOpen(false)}
         onImported={() => { setSettingsOpen(false); loadDraft(); show('history'); }}
       />
@@ -147,16 +150,4 @@ function Tab(props: { view: View; current: View; label: string; onClick: (v: Vie
       <span>{props.label}</span>
     </button>
   );
-}
-
-function convertDraft(draft: Draft, unit: Unit): Draft {
-  const convert = (w: string) => {
-    const n = parseNumber(w);
-    return n === null ? w : formatWeight(toKg(n, draft.unit), unit);
-  };
-  return {
-    ...draft,
-    unit,
-    exercises: draft.exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s, weight: convert(s.weight) })) }))
-  };
 }
