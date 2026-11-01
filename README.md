@@ -1,6 +1,6 @@
-# Workout Tracker
+# Freddie Butler Training (workout tracker)
 
-A strength-training log that installs on your iPhone like an app and works offline at the gym. It's being built up in phases into an advanced, gamified training app. See [docs/SPEC.md](docs/SPEC.md) for the full spec and [CHANGELOG.md](CHANGELOG.md) for what's changed.
+Freddie Butler Personal Training's strength-training log. It installs on your iPhone like an app and works offline at the gym. Dark (charcoal and forest green) by default, with a light theme in Settings. It's being built up in phases into an advanced, gamified training app. See [docs/SPEC.md](docs/SPEC.md) for the full spec and [CHANGELOG.md](CHANGELOG.md) for what's changed.
 
 Live app: **https://freddiept1.github.io/workout-tracker/**
 
@@ -57,9 +57,12 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 - **Total:** best squat + bench + deadlift (lifted and e1RM), with DOTS and Wilks. Set your category and bodyweight in Settings.
 - **PRs** (heaviest weight, rep PRs, e1RM, session volume) get a celebration when you finish a workout, and 🏆 badges in History.
 
+### Streak
+Your streak counts training days in a row, and up to **2 rest days** in a row keep it alive (a 3rd breaks it). The Log tab shows your current and best streak and how many rest days you have left.
+
 ### Other screens
 - **History**: every workout, newest first, with tonnage and PR badges. Tap one for details or to delete it.
-- **Settings** (gear icon): kg or lb (weights are converted), rest timer beep and notifications, bar/collar/plates, backup Export/Import.
+- **Settings** (gear icon): theme (Dark / Light / Match phone), kg or lb (weights are converted), lifter profile, rest timer beep and notifications, bar/collar/plates, backup Export/Import.
 
 ## Your data
 Everything is stored on your phone only, in the browser's database (IndexedDB). Nothing is sent anywhere.

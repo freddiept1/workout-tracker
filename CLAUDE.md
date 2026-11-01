@@ -6,7 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The owner is a personal trainer and competitive powerlifter, new to coding, who uses the app daily as a PWA on an **iPhone** (installed from Safari). Explain changes in plain language and tell them what to check on their phone. Their real training data exists only on that phone, so it must never be lost.
 
 ## Roadmap and working rules
-The app is being built in phases from `docs/SPEC.md` (the user's spec; the agreed phase list is in `CHANGELOG.md` and the data plan in `docs/DATA_MODEL.md`). Phases 0 (foundation), 1 (better logging + athletic work), 2 (exercise library), 3 (analytics) and 4 (programs + auto-progression) are done. Next is 5 body/readiness: a bodyweight log should replace `settings.bodyweightKg` as the source for DOTS/Wilks, and a readiness score could scale program prescriptions. Then 6 gamified Lifter Profile (+500 XP per finished program: `Program.status` becomes 'completed'), and 7 sync/import/export. The user's rules:
+The app is being built in phases from `docs/SPEC.md` (the user's spec; the agreed phase list is in `CHANGELOG.md` and the data plan in `docs/DATA_MODEL.md`). Phases 0 (foundation), 1 (better logging + athletic work), 2 (exercise library), 3 (analytics) and 4 (programs + auto-progression) are done, plus a visual redesign (branding, themes, streak).
+- **Phase 5 (body/readiness) is skipped for now.** If it comes back, a bodyweight log should replace `settings.bodyweightKg` as the source for DOTS/Wilks.
+- **The user does NOT want gamification:** no XP, levels, ranks, quests, boss fights or trophy cabinets. The streak is the only game-like element.
+- **Remaining:** Phase 7 (sync/import/export), and the spec's "Later" items. The user's rules:
 - One phase at a time, and get approval before starting each. After each phase: run it, test it, commit with a clear message, publish, and give the user a phone checklist.
 - Gym-first UI: big tap targets, dark mode, logging a set in under 2 seconds, works offline.
 - Any schema change needs a migration. Never lose logged sessions.
@@ -45,6 +48,13 @@ On this Windows machine, if `npm` isn't found, refresh PATH from the Machine and
   - `prescribe()` is the pure progression engine (linear/double/rpe/pct/fixed, deloads, athletic effort). It always returns `summary` + `why`. Keep explanations specific, and never silently override what the lifter types.
   - `buildProgramDraft()` in `repo.ts` gathers history and the reference 1RM, rounds loads to plates (`loadRounder`), and sets `draft.program` + `DraftExercise.plan`. `finishDraft()` writes `session.programDayId = "programId:slot"` and ticks the program's log.
   - Plateau detection is in `lib/plateau.ts`; example programs in `lib/examplePrograms.ts`. The UI is `views/PlanView.tsx` + `views/plan/ProgramEditor.tsx`.
+- **Look and branding:**
+  - The user is Freddie Butler (Freddie Butler Personal Training). The logo files are in `public/brand/`.
+  - The monogram is redrawn as SVG paths in `components/Logo.tsx` (F = `--brand-green`, B = `currentColor`) and reused in `public/icon.svg` (charcoal background). Run `npm run icons` after changing it.
+  - Colours are CSS tokens at the top of `src/styles.css`. Dark is the default `:root`; light comes from `[data-theme='light']`, or `'system'` + `prefers-color-scheme: light`. Use `--accent` for green text/icons/charts, `--accent-strong` for button fills, and `--done`/`--warn`/`--gold`. Never hard-code colours or reintroduce orange.
+  - `settings.theme` (default 'dark') is applied in `App.tsx` (`applyTheme`: `data-theme`, theme-color meta, and a `themechange` event for charts).
+  - Headings use Montserrat via `@fontsource/montserrat` (`--display`).
+- **Streak:** `lib/streak.ts` counts training days, where up to 2 rest days in a row (`MAX_REST_DAYS`) keep it alive. It's computed from sessions, never stored. UI is in `components/StreakCard.tsx`.
 - **Tempo:** `DraftExercise.tempo` applies to all of an exercise's sets on save (`toSetEntry`), unless a set has its own. It's pre-filled from the most common tempo last time (`commonTempo`), else `Exercise.defaultTempo`.
 - **Session screen:** `src/views/LogView.tsx`, plus `views/log/` (exercise picker with favourites/recent/swap-family mode, set/RPE/tempo sheets, exercise ⋯ menu with swap/rest/warm-ups/plates/supersets, rest timer). The Exercises tab is `views/ExercisesView.tsx` + `views/library/ExerciseEditor.tsx`. Shared list UI is in `components/ExerciseList.tsx`. Bottom sheets use `components/Sheet.tsx` (a `<dialog>`). The top bar has a `#header-slot` that screens can portal buttons into (Finish). Rest-timer alerts are in `lib/alerts.ts`. iPhone web apps can't vibrate or run timers while locked, so don't promise lock-screen alerts.
 - **UI:** `App.tsx` is the shell (startup gate, header, bottom tabs, settings dialog), and `src/views/*` has one component per tab. Styles are in `src/styles.css`: CSS variables with dark-mode overrides, and `env(safe-area-inset-*)` for the notch and home bar. The chart reads the CSS variables.

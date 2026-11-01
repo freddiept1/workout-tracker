@@ -5,7 +5,9 @@ import { db } from '../db/db';
 import { finishDraft, lastPerformance, listPrograms, updateExercise } from '../db/repo';
 import type { Draft, DraftExercise, DraftSet, Exercise, Program, Settings, Template, Unit } from '../db/types';
 import { isDeloadWeek, nextSlot, type Slot } from '../lib/programs';
-import { useExerciseMap, useTemplates } from '../hooks';
+import { Wordmark } from '../components/Logo';
+import { StreakCard } from '../components/StreakCard';
+import { useExerciseMap, useSessions, useTemplates } from '../hooks';
 import { unlockAudio } from '../lib/alerts';
 import { shortDate } from '../lib/dates';
 import { afterTick, blankSet, finishPlan, groupLetters, linkWithNext, move, newDraftExercise, unlink } from '../lib/draft';
@@ -30,6 +32,7 @@ type SetRef = { ex: number; set: string };
 export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: Props) {
   const templates = useTemplates();
   const programs = useLiveQuery(() => listPrograms(db).then((all) => all.filter((p) => p.status === 'active')), []);
+  const sessions = useSessions();
   const exercises = useExerciseMap();
   const unit = settings.unit;
   const plates = settings.equipment[unit];
@@ -57,6 +60,8 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   if (!draft) {
     return (
       <>
+        <Wordmark />
+        {sessions && <StreakCard sessions={sessions} />}
         {programs?.map((p) => {
           const next = nextSlot(p);
           if (!next) return null;

@@ -2,8 +2,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState, type ReactNode } from 'react';
 import { db } from './db/db';
 import { Celebration } from './components/Celebration';
+import { Monogram } from './components/Logo';
 import { buildProgramDraft, getDraft, getSettings, listSessions, saveDraft, startup, type StartupResult } from './db/repo';
-import type { Draft, Exercise, MigrationInfo, Program, Session } from './db/types';
+import type { Draft, Exercise, MigrationInfo, Program, Session, Settings } from './db/types';
 import { convertDraftUnit, exercisesFromSession } from './lib/draft';
 import { nowIso, today } from './lib/ids';
 import type { Slot } from './lib/programs';
@@ -60,6 +61,14 @@ function Recovery({ message, legacyRaw }: { message: string; legacyRaw: string |
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+function applyTheme(theme: Settings['theme']) {
+  document.documentElement.dataset.theme = theme;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bg));
+  // Charts read colours when drawn; tell them to redraw.
+  window.dispatchEvent(new Event('themechange'));
+}
+
 const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Plan' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
@@ -83,6 +92,12 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
     setDraftState(d);
     saveDraft(db, d);
   };
+
+  // Theme: the CSS reads data-theme on <html>; the status bar colour follows the background.
+  const theme = settings?.theme;
+  useEffect(() => {
+    if (theme) applyTheme(theme);
+  }, [theme]);
 
   // If the unit setting changes mid-workout, convert what's been typed so far.
   const unit = settings?.unit;
@@ -133,7 +148,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   return (
     <>
       <header className="topbar">
-        <h1>{title}</h1>
+        <h1><Monogram size={26} />{title}</h1>
         {/* Screens can put their own buttons here (Log puts "Finish" during a workout). */}
         <div id="header-slot" className="header-slot" />
         <button type="button" className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>

@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-const COLOURS = ['#ff7a3d', '#f59f00', '#2f9e44', '#1c7ed6', '#e64980', '#ffffff'];
+const COLOURS = ['#4f8a4a', '#6aae62', '#f0b429', '#edeee9', '#2e6a3c', '#d9a441'];
 
 /** The moment after finishing a workout with PRs. */
 export function Celebration({ prs, exercises, unit, onClose }: Props) {

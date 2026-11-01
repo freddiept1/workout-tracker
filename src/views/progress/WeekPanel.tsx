@@ -4,6 +4,7 @@ import type { Exercise, Session, Unit } from '../../db/types';
 import { shortDate } from '../../lib/dates';
 import { today } from '../../lib/ids';
 import { describePR, type PR } from '../../lib/prs';
+import { streak } from '../../lib/streak';
 import { fromKg, round } from '../../lib/units';
 import { addDays, calendarWeeks, inWeek, REGIONS, summariseWeek, weekStart, weeklyTonnage } from '../../lib/weekly';
 
@@ -32,6 +33,7 @@ export function WeekPanel({ sessions, exercises, prs, unit }: Props) {
   const weekPRs = useMemo(() => [...prs.values()].flat().filter((p) => inWeek(p.date, start)), [prs, start]);
   const tonnage = useMemo(() => weeklyTonnage(sessions, exercises, now), [sessions, exercises, now]);
   const calendar = useMemo(() => calendarWeeks(sessions, now), [sessions, now]);
+  const currentStreak = useMemo(() => streak(sessions, now), [sessions, now]);
 
   const tonnageNow = Math.round(fromKg(week.tonnageKg, unit));
   const tonnageChange = pct(week.tonnageKg, prev.tonnageKg);
@@ -148,6 +150,7 @@ export function WeekPanel({ sessions, exercises, prs, unit }: Props) {
         <p className="hint">
           Last {calendar.length} weeks, Monday at the top. Trained in {trainedWeeks} of them
           {counted.length ? `, ${avgPerWeek} sessions a week on average${counted.length < calendar.length ? ' since you started' : ''}` : ''}.
+          {currentStreak.current > 0 && ` Current streak: 🔥 ${currentStreak.current} training days (best ${currentStreak.best}).`}
         </p>
       </div>
     </>

@@ -58,6 +58,15 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
       <form method="dialog" className="stack">
         <h2>Settings</h2>
         <div>
+          <label>Theme</label>
+          <div className="segmented">
+            {([['dark', 'Dark'], ['light', 'Light'], ['system', 'Match phone']] as const).map(([t, label]) => (
+              <button type="button" key={t} className={settings.theme === t ? 'on' : ''} onClick={() => updateSettings(db, { theme: t })}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <label>Weight unit</label>
           <div className="segmented">
             {(['kg', 'lb'] as const).map((u) => (

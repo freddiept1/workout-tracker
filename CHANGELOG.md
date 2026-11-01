@@ -2,6 +2,23 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## New look (2026-11-01)
+
+### Added
+- **Freddie Butler branding:**
+  - The FB monogram is the home-screen icon (on charcoal) and sits in the top bar.
+  - The Log tab opens with the full "FREDDIE BUTLER · PERSONAL TRAINING" logo.
+  - The app is now called "Freddie Butler Training" ("FB Training" under the icon).
+- **Dark theme by default,** in charcoal and forest green, with a **Light** theme (the logo's off-white) and **Match phone** in Settings → Theme.
+- **Streak:** consecutive training days, where up to 2 rest days in a row keep it going.
+  - The Log tab shows the count, your best, and how many rest days you have left before you need to train.
+  - History shows 🔥 next to the workout count, and Progress → Week mentions it.
+- **Montserrat** (the logo's typeface) for headings and big numbers. It's bundled, so it works offline.
+
+### Changed
+- Orange accents are now forest green throughout. Warnings use amber; PRs stay gold.
+- The active tab gets a green pill highlight.
+
 ## Phase 4: Programs and auto-progression (2026-11-01)
 
 ### Added

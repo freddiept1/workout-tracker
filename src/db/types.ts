@@ -170,9 +170,10 @@ export interface Settings {
   /** For DOTS/Wilks. Bodyweight moves to a proper log in Phase 5; this stays as the fallback. */
   sex: 'male' | 'female' | null;
   bodyweightKg: number | null;
+  theme: 'dark' | 'light' | 'system';
 }
 
-export const DEFAULT_SETTINGS: Settings = { unit: 'kg', restSound: true, equipment: DEFAULT_EQUIPMENT, sex: null, bodyweightKg: null };
+export const DEFAULT_SETTINGS: Settings = { unit: 'kg', restSound: true, equipment: DEFAULT_EQUIPMENT, sex: null, bodyweightKg: null, theme: 'dark' };
 
 /**
  * The workout being logged, kept exactly as typed so nothing is lost if the app closes.

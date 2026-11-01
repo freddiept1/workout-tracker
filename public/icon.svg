@@ -1,10 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#d9480f"/>
-  <g fill="#ffffff">
-    <rect x="186" y="244" width="140" height="24" rx="6"/>
-    <rect x="148" y="166" width="42" height="180" rx="12"/>
-    <rect x="322" y="166" width="42" height="180" rx="12"/>
-    <rect x="110" y="200" width="34" height="112" rx="10"/>
-    <rect x="368" y="200" width="34" height="112" rx="10"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1932 1932">
+  <rect width="1932" height="1932" fill="#1a1d1b"/>
+  <!-- Freddie Butler monogram (traced from public/brand/fb-monogram.png); same paths as src/components/Logo.tsx -->
+  <path d="M513 491 L1187 491 L1107 640 L650 641 L617 832 L1008 832 L932 970 L592 971 L530 1316 L365 1316 Z" fill="#4f8a4a"/>
+  <path fill="#efeee8" fill-rule="evenodd" d="M1131 662 L1280 662 C1420 662 1497 740 1497 870 C1497 940 1465 990 1422 1012 C1515 1035 1567 1110 1567 1215 C1567 1350 1470 1440 1330 1440 L680 1440 L763 1034 L935 1034 L973 965 L1253 965 C1310 965 1347 932 1347 885 C1347 836 1310 804 1262 804 L1058 804 Z M909 1104 L1295 1104 C1365 1104 1408 1145 1408 1200 C1408 1260 1365 1299 1300 1299 L872 1299 Z"/>
 </svg>

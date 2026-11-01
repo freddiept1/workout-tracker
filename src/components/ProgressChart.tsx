@@ -15,10 +15,12 @@ export function ProgressChart({ labels, values, unit, kind = 'line', height }: P
   const [scheme, setScheme] = useState(0);
 
   useEffect(() => {
+    // Redraw when the phone switches light/dark, or the app's theme setting changes.
     const mq = matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => setScheme((n) => n + 1);
     mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    window.addEventListener('themechange', onChange);
+    return () => { mq.removeEventListener('change', onChange); window.removeEventListener('themechange', onChange); };
   }, []);
 
   useEffect(() => {

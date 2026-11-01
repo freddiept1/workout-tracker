@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { deleteSession, saveTemplate } from '../db/repo';
 import type { Session, Unit } from '../db/types';
+import { StreakChip } from '../components/StreakCard';
 import { useExerciseMap, usePRs, useSessions, useTemplates } from '../hooks';
 import { longDate } from '../lib/dates';
 import { commonTempo } from '../lib/draft';
@@ -31,7 +32,7 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
 
   return (
     <>
-      <h2>{sessions.length} workout{sessions.length === 1 ? '' : 's'}</h2>
+      <h2 className="history-head">{sessions.length} workout{sessions.length === 1 ? '' : 's'}<StreakChip sessions={sessions} /></h2>
       {sessions.map((s) => {
         const template = templates?.find((t) => t.id === s.templateId);
         const program = s.programDayId ? programs?.find((p) => p.id === s.programDayId!.split(':')[0]) : undefined;
