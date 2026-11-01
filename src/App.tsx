@@ -5,13 +5,14 @@ import { getDraft, getSettings, saveDraft, startup, type StartupResult } from '.
 import type { Draft, MigrationInfo } from './db/types';
 import { convertDraftUnit } from './lib/draft';
 import { saveFile } from './lib/saveFile';
+import { ExercisesView } from './views/ExercisesView';
 import { HistoryView } from './views/HistoryView';
 import { LogView } from './views/LogView';
 import { ProgressView } from './views/ProgressView';
 import { SettingsDialog } from './views/SettingsDialog';
 import { TemplatesView } from './views/TemplatesView';
 
-type View = 'log' | 'history' | 'progress' | 'templates';
+type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates';
 
 function safeLocalStorage(): Storage | null {
   try {
@@ -55,7 +56,7 @@ function Recovery({ message, legacyRaw }: { message: string; legacyRaw: string |
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-const titles: Record<View, string> ={ log: 'Log', history: 'History', progress: 'Progress', templates: 'Templates' };
+const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Templates' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   // undefined until loaded: don't render (or convert the draft's units) against default settings.
@@ -118,6 +119,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={() => show('history')} />}
           {view === 'history' && <HistoryView unit={unit} />}
           {view === 'progress' && <ProgressView unit={unit} />}
+          {view === 'exercises' && <ExercisesView onMerged={loadDraft} />}
           {view === 'templates' && <TemplatesView />}
         </section>
       </main>
@@ -128,6 +130,9 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" />
         </Tab>
         <Tab view="progress" current={view} onClick={show} label="Progress"><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></Tab>
+        <Tab view="exercises" current={view} onClick={show} label="Exercises">
+          <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
+        </Tab>
         <Tab view="templates" current={view} onClick={show} label="Templates">
           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Tab>

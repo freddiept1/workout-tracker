@@ -13,20 +13,30 @@ export function blankSet(exercise?: Exercise): DraftSet {
 }
 
 export function newDraftExercise(exercise: Exercise, lastSets: SetEntry[] | null, unit: Unit): DraftExercise {
-  return { id: newId(), exerciseId: exercise.id, supersetGroup: null, restSec: null, notes: '', sets: prefill(exercise, lastSets, unit) };
+  const tempo = commonTempo(lastSets ?? []) || exercise.defaultTempo || '';
+  return { id: newId(), exerciseId: exercise.id, supersetGroup: null, restSec: null, notes: '', tempo, sets: prefill(exercise, lastSets, unit, tempo) };
+}
+
+/** The tempo most working sets used ('' if none). */
+export function commonTempo(sets: Pick<SetEntry, 'type' | 'tempo'>[]): string {
+  const counts = new Map<string, number>();
+  for (const s of sets) if (s.type !== 'warmup' && s.tempo) counts.set(s.tempo, (counts.get(s.tempo) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 }
 
 /**
- * Sets copied from last time: values, types, sides, tempo and effort (effort is planned, like a load).
- * RPE and notes aren't copied, since they describe how that day's set went. No history: one blank set.
+ * Sets copied from last time: values, types, sides and effort (effort is planned, like a load).
+ * Tempo is kept per exercise; a set keeps its own only if it differed. RPE and notes aren't copied,
+ * since they describe how that day's set went. No history: one blank set.
  */
-export function prefill(exercise: Exercise, lastSets: SetEntry[] | null, unit: Unit): DraftSet[] {
+export function prefill(exercise: Exercise, lastSets: SetEntry[] | null, unit: Unit, exerciseTempo = ''): DraftSet[] {
   if (!lastSets?.length) return [blankSet(exercise)];
   const fields: Field[] = ['weight', 'reps', 'distance'];
   return lastSets.map((s) => {
     const set = blankSet(exercise);
     for (const f of fields) set[f] = fieldText(s, f, unit) || set[f];
-    return { ...set, type: s.type, side: s.side ?? null, tempo: s.tempo ?? '', effort: s.effortPct ?? null };
+    const tempo = s.tempo && s.tempo !== exerciseTempo ? s.tempo : '';
+    return { ...set, type: s.type, side: s.side ?? null, tempo, effort: s.effortPct ?? null };
   });
 }
 
@@ -59,8 +69,8 @@ export function convertDraftUnit(draft: Draft, unit: Unit): Draft {
   return { ...draft, unit, exercises: draft.exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s, weight: convert(s.weight) })) })) };
 }
 
-/** The stored form of a typed set. */
-export function toSetEntry(s: DraftSet, exercise: Exercise | undefined, unit: Unit, completedAt: string): SetEntry {
+/** The stored form of a typed set. The exercise's tempo applies unless the set has its own. */
+export function toSetEntry(s: DraftSet, exercise: Exercise | undefined, unit: Unit, completedAt: string, exerciseTempo = ''): SetEntry {
   const mode = MODES[modeOf(exercise)];
   const uses = (f: Field) => mode.fields.includes(f);
   const n = (f: Field) => (uses(f) ? parseNumber(cleanInput(f, s[f])) : null);
@@ -74,7 +84,7 @@ export function toSetEntry(s: DraftSet, exercise: Exercise | undefined, unit: Un
     effortPct: mode.rating === 'effort' ? s.effort : null,
     distanceM: n('distance'),
     side: exercise?.unilateral ? s.side : null,
-    tempo: s.tempo.trim() || undefined,
+    tempo: s.tempo.trim() || exerciseTempo.trim() || undefined,
     notes: s.notes.trim() || undefined,
     completedAt: s.completedAt ?? completedAt
   };

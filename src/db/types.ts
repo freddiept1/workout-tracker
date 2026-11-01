@@ -48,13 +48,16 @@ export interface Exercise extends BaseRecord {
   unilateral?: boolean; // sets record a side (L/R)
   restSec?: number | null; // default rest after a set; missing = default for the tracking mode
   defaultDistanceM?: number | null; // pre-filled distance, e.g. 10 for "10 m Sprint"
-  // Filled in by the exercise library (Phase 2).
-  parentId?: string | null;
+  defaultTempo?: string | null; // e.g. "3-1-X-0", pre-filled when the exercise is added to a workout
+  // Library tags (src/lib/muscles.ts has the vocabularies).
+  parentId?: string | null; // the lift this is a variation of
   muscles?: MuscleShare[];
   pattern?: string | null;
   equipment?: string | null;
   mechanic?: 'compound' | 'isolation' | null;
+  aliases?: string[]; // extra search words
   favourite?: boolean;
+  mergedInto?: string | null; // set when merged into another exercise (and hidden)
 }
 
 export interface SetEntry {
@@ -145,6 +148,7 @@ export interface DraftExercise {
   supersetGroup: string | null;
   restSec: number | null; // override for this session; null = exercise default
   notes: string;
+  tempo?: string; // applies to every set without its own tempo (added in Phase 2)
   sets: DraftSet[];
 }
 
@@ -185,6 +189,6 @@ export interface MigrationInfo {
 }
 
 export interface MetaRow {
-  key: 'settings' | 'draft' | 'migration';
+  key: 'settings' | 'draft' | 'migration' | 'library';
   value: unknown;
 }

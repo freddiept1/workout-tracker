@@ -1,74 +1,69 @@
-// Built-in athletic exercises, added to every install (existing or new) on startup if missing.
-// The full exercise library comes in Phase 2.
+// Installs the built-in exercise library (src/db/library.ts) and tops it up when LIBRARY_VERSION goes up.
 import { exerciseIdFor, nowIso } from '../lib/ids';
 import type { TrackerDB } from './db';
-import type { Exercise, TrackingMode } from './types';
+import { LIBRARY, LIBRARY_VERSION, type LibraryEntry } from './library';
+import type { Exercise } from './types';
 
-interface Seed {
-  name: string;
-  tracking: TrackingMode;
-  unilateral?: boolean;
-  defaultDistanceM?: number;
+export function libraryExercise(entry: LibraryEntry, now: string): Exercise {
+  return {
+    id: exerciseIdFor(entry.name),
+    name: entry.name,
+    isCustom: false,
+    tracking: entry.tracking ?? 'strength',
+    unilateral: entry.unilateral ?? false,
+    defaultDistanceM: entry.defaultDistanceM ?? null,
+    defaultTempo: entry.defaultTempo ?? null,
+    parentId: entry.parent ? exerciseIdFor(entry.parent) : null,
+    muscles: Object.entries(entry.muscles).map(([muscle, pct]) => ({ muscle, pct: pct! })),
+    pattern: entry.pattern,
+    equipment: entry.equipment,
+    mechanic: entry.mechanic,
+    aliases: entry.aliases ?? [],
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null
+  };
 }
 
-export const ATHLETIC_SEED: Seed[] = [
-  // Sprints: distance × reps @ effort
-  { name: '10 m Sprint', tracking: 'sprint', defaultDistanceM: 10 },
-  { name: '20 m Sprint', tracking: 'sprint', defaultDistanceM: 20 },
-  { name: '30 m Sprint', tracking: 'sprint', defaultDistanceM: 30 },
-  { name: '40 m Sprint', tracking: 'sprint', defaultDistanceM: 40 },
-  { name: 'Flying 10 m Sprint', tracking: 'sprint', defaultDistanceM: 10 },
-  { name: 'Flying 20 m Sprint', tracking: 'sprint', defaultDistanceM: 20 },
-  { name: 'Acceleration Sprint', tracking: 'sprint' },
-  { name: 'Hill Sprint', tracking: 'sprint' },
-  { name: '5-0-5 Agility', tracking: 'sprint', unilateral: true, defaultDistanceM: 10 },
-  { name: 'Pro Agility (5-10-5)', tracking: 'sprint', defaultDistanceM: 20 },
-  // Jumps: reps @ effort
-  { name: 'Countermovement Jump', tracking: 'jump' },
-  { name: 'Squat Jump', tracking: 'jump' },
-  { name: 'Box Jump', tracking: 'jump' },
-  { name: 'Depth Jump', tracking: 'jump' },
-  { name: 'Broad Jump', tracking: 'jump' },
-  { name: 'Triple Broad Jump', tracking: 'jump' },
-  { name: 'Tuck Jump', tracking: 'jump' },
-  { name: 'Hurdle Jump', tracking: 'jump' },
-  { name: 'Single-Leg Box Jump', tracking: 'jump', unilateral: true },
-  // Hops and bounds: reps @ effort, per leg
-  { name: 'Single-Leg Hop', tracking: 'jump', unilateral: true },
-  { name: 'Triple Hop', tracking: 'jump', unilateral: true },
-  { name: 'Lateral Hop', tracking: 'jump', unilateral: true },
-  { name: 'Crossover Hop', tracking: 'jump', unilateral: true },
-  { name: 'Single-Leg Hurdle Hop', tracking: 'jump', unilateral: true },
-  { name: 'Pogo Hops', tracking: 'jump' },
-  { name: 'Bounds', tracking: 'jump' },
-  { name: 'Lateral Bounds', tracking: 'jump' },
-  // Throws: ball weight × reps @ effort
-  { name: 'Medicine Ball Chest Pass', tracking: 'throw' },
-  { name: 'Overhead Medicine Ball Throw', tracking: 'throw' },
-  { name: 'Rotational Medicine Ball Throw', tracking: 'throw', unilateral: true },
-  { name: 'Medicine Ball Scoop Toss', tracking: 'throw' },
-  { name: 'Medicine Ball Slam', tracking: 'throw' },
-  // Carries and sleds: load × distance @ effort
-  { name: "Farmer's Carry", tracking: 'carry' },
-  { name: 'Sled Push', tracking: 'carry' },
-  { name: 'Sled Drag', tracking: 'carry' },
-  { name: 'Resisted Sled Sprint', tracking: 'carry' }
-];
+const TAGS = ['parentId', 'muscles', 'pattern', 'equipment', 'mechanic', 'aliases', 'defaultTempo', 'defaultDistanceM', 'unilateral'] as const;
+const isEmpty = (v: unknown) => v === undefined || v === null || (Array.isArray(v) && v.length === 0);
 
-/** Adds any built-in exercise that doesn't exist yet. Never changes or revives existing ones. */
-export async function ensureSeedExercises(db: TrackerDB): Promise<number> {
-  const now = nowIso();
-  const wanted = ATHLETIC_SEED.map((s) => ({ ...s, id: exerciseIdFor(s.name) }));
-  // One transaction, so two launches at once can't both add the same exercise.
-  return db.transaction('rw', db.exercises, async () => {
-    const existing = new Set((await db.exercises.bulkGet(wanted.map((s) => s.id))).filter(Boolean).map((e) => e!.id));
-    const missing: Exercise[] = wanted
-      .filter((s) => !existing.has(s.id))
-      .map(({ id, name, tracking, unilateral, defaultDistanceM }) => ({
-        id, name, tracking, unilateral: unilateral ?? false, defaultDistanceM: defaultDistanceM ?? null,
-        isCustom: false, createdAt: now, updatedAt: now, deletedAt: null
-      }));
-    if (missing.length) await db.exercises.bulkPut(missing);
-    return missing.length;
+/**
+ * Adds library exercises that are missing, and fills in empty tags on exercises that already exist
+ * with the same id (e.g. "Squat" logged before the library existed). Never overwrites anything the
+ * lifter set, never changes an existing exercise's tracking type (its history depends on it), and
+ * never brings back an exercise the lifter hid. Runs once per LIBRARY_VERSION.
+ */
+export async function applyLibrary(db: TrackerDB, force = false): Promise<{ added: number; updated: number }> {
+  return db.transaction('rw', [db.exercises, db.meta], async () => {
+    const done = (await db.meta.get('library'))?.value as { version: number } | undefined;
+    if (!force && done && done.version >= LIBRARY_VERSION) return { added: 0, updated: 0 };
+    const now = nowIso();
+    const wanted = LIBRARY.map((e) => libraryExercise(e, now));
+    const existing = await db.exercises.bulkGet(wanted.map((e) => e.id));
+    const puts: Exercise[] = [];
+    let added = 0;
+    let updated = 0;
+    wanted.forEach((lib, i) => {
+      const ex = existing[i];
+      if (!ex) {
+        puts.push(lib);
+        added++;
+      } else if (!ex.deletedAt) {
+        const filled: Exercise = { ...ex };
+        let changed = false;
+        for (const key of TAGS) {
+          if (isEmpty(ex[key]) && !isEmpty(lib[key])) {
+            (filled as unknown as Record<string, unknown>)[key] = lib[key];
+            changed = true;
+          }
+        }
+        if (ex.isCustom) { filled.isCustom = false; changed = true; }
+        if (changed) { puts.push({ ...filled, updatedAt: now }); updated++; }
+      }
+    });
+    if (puts.length) await db.exercises.bulkPut(puts);
+    await db.meta.put({ key: 'library', value: { version: LIBRARY_VERSION, at: now } });
+    return { added, updated };
   });
 }

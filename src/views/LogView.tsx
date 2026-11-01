@@ -14,6 +14,7 @@ import { ExerciseMenu } from './log/ExerciseMenu';
 import { ExercisePicker } from './log/ExercisePicker';
 import { RestTimer } from './log/RestTimer';
 import { RatingSheet, SetSheet } from './log/SetSheets';
+import { TempoSheet } from './log/TempoSheet';
 
 interface Props {
   draft: Draft | null;
@@ -33,6 +34,8 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [setSheet, setSetSheet] = useState<SetRef | null>(null);
   const [ratingFor, setRatingFor] = useState<SetRef | null>(null);
+  const [tempoFor, setTempoFor] = useState<number | null>(null);
+  const [swapFor, setSwapFor] = useState<number | null>(null);
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
   async function entryFor(ex: Exercise, u: Unit): Promise<DraftExercise> {
@@ -78,6 +81,23 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
   async function addExercise(ex: Exercise) {
     onChange({ ...d, exercises: [...d.exercises, await entryFor(ex, d.unit)] });
     setTimeout(() => [...document.querySelectorAll('.exercise-card')].pop()?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  /**
+   * Swap an exercise for a variation. Ticked sets are kept; if none are ticked yet, the sets are
+   * pre-filled from the new exercise's last session instead.
+   */
+  async function swap(i: number, ex: Exercise) {
+    const entry = d.exercises[i];
+    const untouched = entry.sets.every((s) => !s.done);
+    const fresh = await entryFor(ex, d.unit);
+    setEntry(i, {
+      ...entry,
+      exerciseId: ex.id,
+      tempo: untouched ? fresh.tempo : entry.tempo, // ticked sets were done at the current tempo
+      restSec: null,
+      sets: untouched ? fresh.sets : entry.sets
+    });
   }
 
   function addSet(i: number) {
@@ -173,6 +193,11 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
               <button type="button" className="ghost icon" aria-label="Exercise options" onClick={() => setMenuFor(i)}>⋯</button>
             </div>
             <LastTime exerciseId={entry.exerciseId} exercise={exercise} unit={d.unit} />
+            {info.rating === 'rpe' && (
+              <button type="button" className={'tempo-chip' + (entry.tempo ? ' on' : '')} onClick={() => setTempoFor(i)}>
+                {entry.tempo ? <>Tempo <b>{entry.tempo}</b></> : '+ Tempo'}
+              </button>
+            )}
             {entry.notes && <p className="exercise-note">{entry.notes}</p>}
 
             <div className="set-grid set-labels" style={{ gridTemplateColumns: cols }}>
@@ -230,6 +255,26 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
 
       <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={addExercise} />
 
+      <ExercisePicker
+        open={swapFor !== null}
+        familyOfId={swapFor !== null ? d.exercises[swapFor]?.exerciseId : null}
+        onClose={() => setSwapFor(null)}
+        onPick={(ex) => swapFor !== null && swap(swapFor, ex)}
+      />
+
+      <TempoSheet
+        open={tempoFor !== null && !!d.exercises[tempoFor]}
+        exerciseName={tempoFor !== null ? exercises.get(d.exercises[tempoFor]?.exerciseId)?.name ?? '' : ''}
+        value={tempoFor !== null ? d.exercises[tempoFor]?.tempo ?? '' : ''}
+        defaultTempo={tempoFor !== null ? exercises.get(d.exercises[tempoFor]?.exerciseId)?.defaultTempo ?? '' : ''}
+        onClose={() => setTempoFor(null)}
+        onSave={(tempo, makeDefault) => {
+          const entry = d.exercises[tempoFor!];
+          setEntry(tempoFor!, { ...entry, tempo });
+          if (makeDefault) void updateExercise(db, entry.exerciseId, { defaultTempo: tempo || null });
+        }}
+      />
+
       <ExerciseMenu
         open={menuFor !== null}
         entry={menuEntry}
@@ -248,6 +293,7 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
           const warmups: DraftSet[] = steps.map((w) => ({ ...blankSet(), type: 'warmup', weight: String(w.weight), reps: String(w.reps) }));
           setEntry(menuFor!, { ...menuEntry!, sets: [...warmups, ...menuEntry!.sets.filter((s) => s.type !== 'warmup')] });
         }}
+        onSwap={() => setSwapFor(menuFor)}
         onLinkNext={() => onChange(linkWithNext(d, menuFor!))}
         onUnlink={() => onChange(unlink(d, menuFor!))}
         onMove={(dir) => {

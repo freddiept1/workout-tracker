@@ -3,6 +3,7 @@ import { deleteSession } from '../db/repo';
 import type { Unit } from '../db/types';
 import { useExerciseMap, useSessions, useTemplates } from '../hooks';
 import { longDate } from '../lib/dates';
+import { commonTempo } from '../lib/draft';
 import { formatSet, modeOf, setBadge } from '../lib/tracking';
 
 export function HistoryView({ unit }: { unit: Unit }) {
@@ -39,9 +40,13 @@ export function HistoryView({ unit }: { unit: Unit }) {
             <div className="workout-detail">
               {s.exercises.map((ex) => {
                 const exercise = exercises.get(ex.exerciseId);
+                const tempo = commonTempo(ex.sets);
                 return (
                   <div key={ex.id}>
-                    <div className="card-title">{exercise?.name ?? ex.exerciseId}</div>
+                    <div className="card-title">
+                      {exercise?.name ?? ex.exerciseId}
+                      {tempo && <span className="tempo-note"> · tempo {tempo}</span>}
+                    </div>
                     {ex.notes && <p className="exercise-note">{ex.notes}</p>}
                     <div className="set-chips">
                       {ex.sets.map((set, i) => (

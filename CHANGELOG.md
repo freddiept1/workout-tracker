@@ -2,6 +2,36 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Phase 2: Exercise library (2026-11-01)
+
+### Added
+- **172-exercise library.** Every exercise is tagged with muscles worked (% of the effort), movement pattern, equipment, and compound/isolation:
+  - **Powerlifting families** with variations listed under the main lift:
+    - Squat: paused, pin, box, tempo, 1¼, Anderson, high/low bar, SSB, beltless, front, Zercher, belt squat…
+    - Bench: paused, long-pause, touch-and-go, close/wide grip, Larsen, Spoto, pin, board, floor, tempo, feet-up, slingshot, incline/decline…
+    - Deadlift: sumo, deficit, paused, tempo, block/rack pull, snatch-grip, stiff-leg, trap bar, RDL, plus sumo variations…
+    - OHP: push press, Z press, seated, paused, behind-the-neck.
+  - **Olympic lifts:**
+    - Clean, power, hang, hang power, block and muscle clean, clean pull and clean high pull.
+    - Clean and jerk; split, push, power and behind-the-neck jerk.
+    - Snatch, power, hang, hang power, block and muscle snatch, snatch pull, high pull and balance, overhead squat.
+  - Accessories, arms, calves, core, and all the athletic exercises (now with muscle tags).
+- **Exercises tab:**
+  - Search covers names, nicknames ("cgbp", "rdl", "ohp") and the parent lift, so "bench" finds Spoto Press.
+  - Filter by category, muscle and equipment.
+  - Star favourites.
+  - Edit anything: name, how it's logged, parent lift, muscles %, movement, equipment, rest, default tempo.
+  - Add your own exercises.
+  - Remove exercises (and restore them later).
+  - Merge duplicates, moving all their history across.
+- **Tempo** on every lift in the tracker: tap the tempo chip, pick a preset or type your own. It applies to all sets, carries over from last time, and can be saved as the exercise's default. Tempo variations come with one (Tempo Squat 3-1-X-0). History shows the tempo used.
+- **Swap for a variation** from an exercise's ⋯ menu (e.g. Squat → Paused Squat mid-workout).
+- **Exercise picker:** favourites and recent exercises at the top, variations grouped under their lift, and the same search and categories.
+
+### Changed
+- Exercises you'd already logged with a library name (Squat, Bench Press…) picked up the library's tags. Anything you set yourself, and how each exercise is logged, is left alone.
+- Typing a renamed exercise's new name in a template now finds it.
+
 ## Phase 1: Better logging + athletic work (2026-11-01)
 
 ### Added

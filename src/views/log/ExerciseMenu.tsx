@@ -18,6 +18,7 @@ interface Props {
   onRest: (sec: number) => void;
   onNotes: (notes: string) => void;
   onWarmups: (steps: WarmupStep[]) => void;
+  onSwap: () => void;
   onLinkNext: () => void;
   onUnlink: () => void;
   onMove: (dir: -1 | 1) => void;
@@ -41,6 +42,7 @@ export function ExerciseMenu(p: Props) {
     <Sheet open={p.open && !!entry} title={p.exercise?.name ?? 'Exercise'} onClose={p.onClose}>
       {entry && (
         <div className="stack">
+          <button type="button" className="ghost full" onClick={() => { p.onClose(); p.onSwap(); }}>Swap for a variation…</button>
           <div>
             <label>Rest after each set</label>
             <div className="stepper">

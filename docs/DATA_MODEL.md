@@ -6,11 +6,11 @@ Every record has `id`, `createdAt`, `updatedAt` and `deletedAt` (soft delete), s
 
 Types live in `src/db/types.ts`, tables and indexes in `src/db/db.ts`.
 
-## Built (Phases 0–1)
+## Built (Phases 0–2)
 
 | Table | Key fields | Notes |
 | --- | --- | --- |
-| `exercises` | id (slug of name, e.g. `bench-press`), name, isCustom, **tracking** (strength/reps/sprint/jump/throw/carry), **unilateral**, **restSec**, **defaultDistanceM**, parentId, muscles[{muscle, pct}], pattern, equipment, mechanic, favourite | `tracking` decides a set's fields (missing = strength). Built-in athletic exercises come from `src/db/seed.ts`. Muscle/pattern tags are filled by the Phase 2 library. Slug ids let the library match exercises migrated from old data |
+| `exercises` | id (slug of name, e.g. `bench-press`), name, isCustom, **tracking** (strength/reps/sprint/jump/throw/carry), **unilateral**, **restSec**, **defaultDistanceM**, **defaultTempo**, **parentId**, **muscles**[{muscle, pct}], **pattern**, **equipment**, **mechanic**, **aliases**[], **favourite**, **mergedInto** | `tracking` decides a set's fields (missing = strength). Built-in exercises come from `src/db/library.ts`, installed by `applyLibrary()` (version in `meta.library`). Slug ids let the library match exercises migrated from old data. `parentId` links a variation to its lift. Removed exercises are soft-deleted. Merged ones also point to `mergedInto` |
 | `sessions` | id, athleteId, date, startedAt, endedAt, templateId, programDayId, notes, sessionRpe, source (live/migrated/imported), exercises[], exerciseIds[] | Exercises and sets are nested inside the session (one record per workout), so a session is saved atomically. `exerciseIds` is a multi-entry index for "last time" lookups |
 | ↳ session exercise | id, exerciseId, supersetGroup, restSec, notes, sets[] | Exercises sharing a `supersetGroup` are a superset/circuit |
 | ↳ set | id, type (warmup/working/top/backoff/amrap/drop/failure), weightKg, reps, rpe, **distanceM**, **effortPct**, **side** (L/R), tempo, notes, completedAt | Lifts use weight/reps/RPE. Athletic work uses distance/reps/load plus `effortPct` (% of max), never measured results. `completedAt` is set when ticked off live (or at finish for filled-in unticked sets). History migrated from the old app has `null` here, which is how XP will tell live work from back-filled history |
@@ -21,7 +21,6 @@ Types live in `src/db/types.ts`, tables and indexes in `src/db/db.ts`.
 
 | Phase | Table | Key fields |
 | --- | --- | --- |
-| 2 | `exercises` (seeded) | ~150 tagged exercises; `favourite`, `parentId` for variations |
 | 3 | (derived, not stored) | e1RM, PRs, rep-maxes, weekly sets per muscle are computed from sessions |
 | 3 | `prs` | id, athleteId, exerciseId, kind (weight/reps/e1rm/volume), value, sessionId, setId, achievedAt; recorded so celebrations fire once |
 | 4 | `programs` | id, athleteId/ownerId, name, weeks, phases, deloadEvery, status |

@@ -3,7 +3,7 @@ import { finishPlan, toSetEntry, upgradeDraftV1 } from '../lib/draft';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
 import type { TrackerDB } from './db';
 import { LEGACY_KEY, isLegacyData, migrateLegacy, type MigrationResult } from './migrateLegacy';
-import { ensureSeedExercises } from './seed';
+import { applyLibrary } from './seed';
 import type { Draft, DraftV1, Exercise, MigrationInfo, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
 import { DEFAULT_SETTINGS, ME } from './types';
 
@@ -44,7 +44,7 @@ export async function startup(db: TrackerDB, storage: Pick<Storage, 'getItem'> |
       const wrote = await writeAll(db, result, info, { onlyIfNotMigrated: true });
       if (wrote && legacyRaw) migrated = info;
     }
-    await ensureSeedExercises(db);
+    await applyLibrary(db);
     return { status: 'ready', migrated };
   } catch (err) {
     return { status: 'error', message: err instanceof Error ? err.message : String(err), legacyRaw };
@@ -152,19 +152,142 @@ export async function saveDraft(db: TrackerDB, draft: Draft | null) {
   await db.meta.put({ key: 'draft', value: draft });
 }
 
-/** Creates any exercises that don't exist yet (by name, as Strength) and returns their ids. */
+/** The exercise with this name (ignoring capitals), preferring visible ones; falls back to the slug id. */
+export async function findExerciseByName(db: TrackerDB, name: string): Promise<Exercise | undefined> {
+  const key = name.trim().toLowerCase();
+  const matches = await db.exercises.filter((e) => e.name.trim().toLowerCase() === key).toArray();
+  return matches.find((e) => !e.deletedAt) ?? matches[0] ?? (await db.exercises.get(exerciseIdFor(name)));
+}
+
+/**
+ * Creates any exercises that don't exist yet (by name, as Strength) and returns their ids.
+ * A hidden exercise is shown again; one merged into another resolves to that one.
+ */
 async function ensureExercises(db: TrackerDB, names: string[]): Promise<string[]> {
   const now = nowIso();
   const ids: string[] = [];
   for (const raw of names) {
     const name = raw.trim();
-    const id = exerciseIdFor(name);
-    const existing = await db.exercises.get(id);
-    if (!existing) await db.exercises.put({ id, name, isCustom: true, tracking: 'strength', createdAt: now, updatedAt: now, deletedAt: null });
-    else if (existing.deletedAt) await db.exercises.put({ ...existing, deletedAt: null, updatedAt: now });
-    ids.push(id);
+    let existing = await findExerciseByName(db, name);
+    if (existing?.mergedInto) existing = (await db.exercises.get(existing.mergedInto)) ?? existing;
+    if (!existing) {
+      const id = await freeId(db, name);
+      await db.exercises.put({ id, name, isCustom: true, tracking: 'strength', createdAt: now, updatedAt: now, deletedAt: null });
+      ids.push(id);
+      continue;
+    }
+    if (existing.deletedAt) await db.exercises.put({ ...existing, deletedAt: null, updatedAt: now });
+    ids.push(existing.id);
   }
   return ids;
+}
+
+/** A slug id for a new exercise that no other exercise (even a hidden one) uses. */
+async function freeId(db: TrackerDB, name: string): Promise<string> {
+  const base = exerciseIdFor(name);
+  let id = base;
+  for (let n = 2; await db.exercises.get(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+export interface ExerciseInput {
+  id?: string; // missing = new exercise
+  name: string;
+  tracking: TrackingMode;
+  unilateral: boolean;
+  parentId: string | null;
+  muscles: Exercise['muscles'];
+  pattern: string | null;
+  equipment: string | null;
+  mechanic: Exercise['mechanic'];
+  restSec: number | null;
+  defaultTempo: string | null;
+  defaultDistanceM: number | null;
+}
+
+/** Creates or edits an exercise from the library screen. Throws a readable error if it isn't valid. */
+export async function saveExercise(db: TrackerDB, input: ExerciseInput): Promise<Exercise> {
+  const name = input.name.trim();
+  if (!name) throw new Error('Give the exercise a name.');
+  return db.transaction('rw', db.exercises, async () => {
+    const clash = await findExerciseByName(db, name);
+    if (clash && clash.id !== input.id && !clash.deletedAt) throw new Error(`There's already an exercise called “${clash.name}”.`);
+    // A lift can't be a variation of itself or of one of its own variations.
+    for (let p = input.parentId; p; p = (await db.exercises.get(p))?.parentId ?? null) {
+      if (p === input.id) throw new Error('An exercise can’t be a variation of its own variation.');
+    }
+    const now = nowIso();
+    const existing = input.id ? await db.exercises.get(input.id) : undefined;
+    const muscles = (input.muscles ?? []).filter((m) => m.pct > 0);
+    const ex: Exercise = {
+      ...(existing ?? { isCustom: true, createdAt: now }),
+      id: existing?.id ?? (await freeId(db, name)),
+      name,
+      tracking: input.tracking,
+      unilateral: input.unilateral,
+      parentId: input.parentId,
+      muscles,
+      pattern: input.pattern,
+      equipment: input.equipment,
+      mechanic: input.mechanic,
+      restSec: input.restSec,
+      defaultTempo: input.defaultTempo?.trim() || null,
+      defaultDistanceM: input.defaultDistanceM,
+      updatedAt: now,
+      deletedAt: null
+    };
+    await db.exercises.put(ex);
+    return ex;
+  });
+}
+
+/** Hides an exercise from lists. Its history stays, and it can be shown again from the library. */
+export async function hideExercise(db: TrackerDB, id: string) {
+  const now = nowIso();
+  await db.exercises.update(id, { deletedAt: now, updatedAt: now });
+}
+
+export async function restoreExercise(db: TrackerDB, id: string) {
+  await db.exercises.update(id, { deletedAt: null, mergedInto: null, updatedAt: nowIso() });
+}
+
+export async function toggleFavourite(db: TrackerDB, id: string) {
+  const ex = await db.exercises.get(id);
+  if (ex) await db.exercises.update(id, { favourite: !ex.favourite, updatedAt: nowIso() });
+}
+
+/**
+ * Moves all of one exercise's history, templates and variations onto another, then hides the first.
+ * Used to tidy duplicates (e.g. "Bench" typed before the library had "Bench Press").
+ */
+export async function mergeExercise(db: TrackerDB, fromId: string, intoId: string): Promise<{ sessions: number }> {
+  if (fromId === intoId) throw new Error('Pick a different exercise to merge into.');
+  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.meta], async () => {
+    const [from, into] = await db.exercises.bulkGet([fromId, intoId]);
+    if (!from || !into) throw new Error('Exercise not found.');
+    const now = nowIso();
+    const swap = (id: string) => (id === fromId ? intoId : id);
+
+    const sessions = await db.sessions.where('exerciseIds').equals(fromId).toArray();
+    await db.sessions.bulkPut(sessions.map((s) => {
+      const exercises = s.exercises.map((e) => ({ ...e, exerciseId: swap(e.exerciseId) }));
+      return { ...s, exercises, exerciseIds: [...new Set(exercises.map((e) => e.exerciseId))], updatedAt: now };
+    }));
+
+    const templates = (await db.templates.toArray()).filter((t) => t.exercises.some((e) => e.exerciseId === fromId));
+    await db.templates.bulkPut(templates.map((t) => ({ ...t, exercises: t.exercises.map((e) => ({ exerciseId: swap(e.exerciseId) })), updatedAt: now })));
+
+    const children = await db.exercises.where('parentId').equals(fromId).toArray();
+    await db.exercises.bulkPut(children.map((c) => ({ ...c, parentId: c.id === intoId ? from.parentId ?? null : intoId, updatedAt: now })));
+
+    const draft = (await db.meta.get('draft'))?.value as Draft | null | undefined;
+    if (draft && 'v' in draft) {
+      await db.meta.put({ key: 'draft', value: { ...draft, exercises: draft.exercises.map((e) => ({ ...e, exerciseId: swap(e.exerciseId) })) } });
+    }
+
+    await db.exercises.update(fromId, { deletedAt: now, mergedInto: intoId, updatedAt: now });
+    return { sessions: sessions.length };
+  });
 }
 
 /**
@@ -173,21 +296,21 @@ async function ensureExercises(db: TrackerDB, names: string[]): Promise<string[]
  */
 export async function createExercise(db: TrackerDB, input: { name: string; tracking: TrackingMode; unilateral: boolean }): Promise<Exercise> {
   const name = input.name.trim();
-  const id = exerciseIdFor(name);
   return db.transaction('rw', db.exercises, async () => {
     const now = nowIso();
-    const existing = await db.exercises.get(id);
+    let existing = await findExerciseByName(db, name);
+    if (existing?.mergedInto) existing = (await db.exercises.get(existing.mergedInto)) ?? existing;
     if (existing) {
-      if (existing.deletedAt) await db.exercises.update(id, { deletedAt: null, updatedAt: now });
+      if (existing.deletedAt) await db.exercises.update(existing.id, { deletedAt: null, mergedInto: null, updatedAt: now });
       return { ...existing, deletedAt: null };
     }
-    const ex: Exercise = { id, name, isCustom: true, tracking: input.tracking, unilateral: input.unilateral, createdAt: now, updatedAt: now, deletedAt: null };
+    const ex: Exercise = { id: await freeId(db, name), name, isCustom: true, tracking: input.tracking, unilateral: input.unilateral, createdAt: now, updatedAt: now, deletedAt: null };
     await db.exercises.put(ex);
     return ex;
   });
 }
 
-export async function updateExercise(db: TrackerDB, id: string, patch: Partial<Pick<Exercise, 'restSec' | 'tracking' | 'unilateral' | 'defaultDistanceM'>>) {
+export async function updateExercise(db: TrackerDB, id: string, patch: Partial<Pick<Exercise, 'restSec' | 'tracking' | 'unilateral' | 'defaultDistanceM' | 'defaultTempo'>>) {
   await db.exercises.update(id, { ...patch, updatedAt: nowIso() });
 }
 
@@ -207,7 +330,7 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
         supersetGroup: ex.supersetGroup,
         restSec: ex.restSec,
         notes: ex.notes.trim() || undefined,
-        sets: ex.sets.filter((s) => plan.include(ex, s)).map((s) => toSetEntry(s, exercises.get(ex.exerciseId), draft.unit, now))
+        sets: ex.sets.filter((s) => plan.include(ex, s)).map((s) => toSetEntry(s, exercises.get(ex.exerciseId), draft.unit, now, ex.tempo))
       }))
       .filter((ex) => ex.sets.length);
     if (!kept.length) return null;
@@ -319,6 +442,6 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
     from: 'fresh', at: now, sourceVersion: data.sourceVersion, sessions: data.sessions.length,
     sets: data.setCount, exercises: data.exercises.length, templates: data.templates.length
   });
-  await ensureSeedExercises(db);
+  await applyLibrary(db, true); // the backup may predate the library, or this library version
   return { sessions: data.sessions.filter((s) => !s.deletedAt).length };
 }

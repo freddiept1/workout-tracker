@@ -32,6 +32,13 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 | Throw | ball weight × reps @ effort |
 | Carry / sled | load × distance @ effort |
 
+### Exercise library (Exercises tab)
+172 built-in exercises: powerlifting lifts with their variations (paused, deficit, tempo, Larsen, Spoto, close-grip, pin, box…), Olympic lifts (clean, power clean, clean and jerk, snatch and their hang/power/pull variations), accessories, core, and athletic work. Each one is tagged with muscles (%), movement pattern and equipment.
+- Search and filter by category, muscle or equipment. Variations are listed under their lift.
+- ★ to favourite. Favourites and recent exercises appear first when adding to a workout.
+- Tap an exercise to edit it. Use **+ New exercise** to add your own, **Remove** to hide one (restore it from "Removed exercises"), or **Merge** to fold a duplicate into another exercise along with its history.
+- **Tempo:** tap the tempo chip on any lift during a workout. Set a default per exercise in the library.
+
 ### Other screens
 - **History**: every workout, newest first. Tap one for details or to delete it.
 - **Progress**: lifts chart the heaviest set per session. Athletic work charts volume (sprint metres, total jumps/throws, heaviest carry).
@@ -57,7 +64,7 @@ npm run build        # production build into dist/
 Pushing to `main` on GitHub runs the tests, builds, and publishes to GitHub Pages automatically.
 
 ### Project layout
-- `src/db/`: data model (`types.ts`), database (`db.ts`), reads/writes (`repo.ts`), migration from the old localStorage format (`migrateLegacy.ts`), built-in athletic exercises (`seed.ts`)
+- `src/db/`: data model (`types.ts`), database (`db.ts`), reads/writes (`repo.ts`), migration from the old localStorage format (`migrateLegacy.ts`), the exercise library (`library.ts`) and its installer (`seed.ts`)
 - `src/lib/`: pure logic with tests next to it: tracking types (`tracking.ts`), the in-progress workout (`draft.ts`), plates, warm-ups, progress metrics, units
 - `src/views/`: one component per screen (the session screen's parts are in `views/log/`); `src/App.tsx` is the shell (tabs, header, startup)
 - `docs/`: spec and data-model plan
