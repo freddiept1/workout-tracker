@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ProfileFields } from '../components/ProfileFields';
 import { db } from '../db/db';
 import { exportAll, importAll, setUnit, updateSettings } from '../db/repo';
 import type { PlateSetup, Settings } from '../db/types';
@@ -64,6 +65,12 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
             ))}
           </div>
           <p className="hint">Weights are converted, so you can switch any time.</p>
+        </div>
+
+        <div>
+          <label>Lifter profile</label>
+          <ProfileFields settings={settings} />
+          <p className="hint">Used for DOTS, Wilks and strength relative to bodyweight on the Progress tab.</p>
         </div>
 
         <div>

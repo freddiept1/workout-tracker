@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState, type ReactNode } from 'react';
 import { db } from './db/db';
-import { getDraft, getSettings, saveDraft, startup, type StartupResult } from './db/repo';
-import type { Draft, MigrationInfo } from './db/types';
+import { Celebration } from './components/Celebration';
+import { getDraft, getSettings, listSessions, saveDraft, startup, type StartupResult } from './db/repo';
+import type { Draft, Exercise, MigrationInfo } from './db/types';
 import { convertDraftUnit } from './lib/draft';
+import { findPRs, type PR } from './lib/prs';
 import { saveFile } from './lib/saveFile';
 import { ExercisesView } from './views/ExercisesView';
 import { HistoryView } from './views/HistoryView';
@@ -91,6 +93,19 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
     window.scrollTo(0, 0);
   }
 
+  // After finishing a workout: go to History, and celebrate any PRs it set.
+  const [celebrate, setCelebrate] = useState<PR[] | null>(null);
+  const [exerciseMap, setExerciseMap] = useState<Map<string, Exercise>>(new Map());
+  async function afterSave(sessionId: string) {
+    show('history');
+    const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]));
+    const prs = findPRs(await listSessions(db), exercises).get(sessionId);
+    if (prs?.length) {
+      setExerciseMap(exercises);
+      setCelebrate(prs);
+    }
+  }
+
   if (draft === undefined || !settings || !unit) return null;
   const title = view === 'log' && draft ? 'Workout' : titles[view];
 
@@ -116,9 +131,9 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           </div>
         )}
         <section className="view active" key={view}>
-          {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={() => show('history')} />}
+          {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={afterSave} />}
           {view === 'history' && <HistoryView unit={unit} />}
-          {view === 'progress' && <ProgressView unit={unit} />}
+          {view === 'progress' && <ProgressView settings={settings} />}
           {view === 'exercises' && <ExercisesView onMerged={loadDraft} />}
           {view === 'templates' && <TemplatesView />}
         </section>
@@ -137,6 +152,8 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Tab>
       </nav>
+
+      <Celebration prs={celebrate} exercises={exerciseMap} unit={unit} onClose={() => setCelebrate(null)} />
 
       <SettingsDialog
         open={settingsOpen}

@@ -39,9 +39,18 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 - Tap an exercise to edit it. Use **+ New exercise** to add your own, **Remove** to hide one (restore it from "Removed exercises"), or **Merge** to fold a duplicate into another exercise along with its history.
 - **Tempo:** tap the tempo chip on any lift during a workout. Set a default per exercise in the library.
 
+### Progress and PRs
+- **Lifts:**
+  - Estimated 1RM chart (RPE-adjusted when you logged RPE, otherwise Epley), or the heaviest set.
+  - Optionally includes the lift's variations.
+  - Best 1RM–12RM table and PR history.
+  - Athletic work charts volume (sprint metres, jumps, throws, heaviest carry).
+- **Week:** sessions, sets and tonnage vs last week, PRs, hard sets per muscle group vs a typical range, tonnage by week, and a consistency calendar.
+- **Total:** best squat + bench + deadlift (lifted and e1RM), with DOTS and Wilks. Set your category and bodyweight in Settings.
+- **PRs** (heaviest weight, rep PRs, e1RM, session volume) get a celebration when you finish a workout, and 🏆 badges in History.
+
 ### Other screens
-- **History**: every workout, newest first. Tap one for details or to delete it.
-- **Progress**: lifts chart the heaviest set per session. Athletic work charts volume (sprint metres, total jumps/throws, heaviest carry).
+- **History**: every workout, newest first, with tonnage and PR badges. Tap one for details or to delete it.
 - **Templates**: your own routines, with one exercise per line.
 - **Settings** (gear icon): kg or lb (weights are converted), rest timer beep and notifications, bar/collar/plates, backup Export/Import.
 

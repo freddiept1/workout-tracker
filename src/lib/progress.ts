@@ -1,4 +1,6 @@
 import type { Session, SetEntry, TrackingMode, Unit } from '../db/types';
+import { setE1RM } from './strength';
+import { weekStart } from './weekly';
 import { fromKg, round } from './units';
 
 /**
@@ -37,18 +39,36 @@ export interface Point {
   value: number;
 }
 
-/** One value per training day (warm-ups left out), oldest first. */
-export function bestByDate(sessions: Session[], exerciseId: string, metric: Metric): Point[] {
+/** Estimated 1RM per day: the best set's estimate (RPE chart if RPE was logged, else Epley). */
+export function e1rmMetric(unit: Unit): Metric {
+  return {
+    label: 'Estimated 1RM', unit, combine: 'max',
+    value: (s) => {
+      if (!((s.weightKg ?? 0) > 0)) return null;
+      const e = setE1RM(s);
+      return e ? round(fromKg(e.value, unit), 1) : null;
+    }
+  };
+}
+
+/**
+ * One value per training day (warm-ups left out), oldest first. `ids` can include variations.
+ * With `byWeek`, one value per week (Monday) instead, which smooths out mixing a lift with its
+ * lighter variations (squat on Monday, paused squat on Thursday).
+ */
+export function bestByDate(sessions: Session[], ids: string | Set<string>, metric: Metric, byWeek = false): Point[] {
+  const wanted = typeof ids === 'string' ? new Set([ids]) : ids;
   const byDay = new Map<string, number>();
   for (const s of sessions) {
+    const day = byWeek ? weekStart(s.date) : s.date;
     for (const ex of s.exercises) {
-      if (ex.exerciseId !== exerciseId) continue;
+      if (!wanted.has(ex.exerciseId)) continue;
       for (const set of ex.sets) {
         if (set.type === 'warmup') continue;
         const v = metric.value(set);
         if (v == null) continue;
-        const prev = byDay.get(s.date);
-        byDay.set(s.date, prev === undefined ? v : metric.combine === 'sum' ? prev + v : Math.max(prev, v));
+        const prev = byDay.get(day);
+        byDay.set(day, prev === undefined ? v : metric.combine === 'sum' ? prev + v : Math.max(prev, v));
       }
     }
   }

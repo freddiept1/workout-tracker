@@ -17,12 +17,14 @@ Types live in `src/db/types.ts`, tables and indexes in `src/db/db.ts`.
 | `templates` | id, athleteId, name, order, exercises[{exerciseId}] | |
 | `meta` | key → value | `settings` ({unit, restSound, equipment {kg, lb: {bar, collar, plates[]}}}), `draft` (the in-progress workout exactly as typed, v2: per-set done/completedAt, rest timer endsAt), `migration` (when/what was migrated) |
 
+### Derived, not stored (Phase 3)
+
+e1RM, PRs, rep maxes, weekly hard sets per muscle group, tonnage and the total/DOTS/Wilks are all computed from `sessions` when needed (see `src/lib/strength.ts`, `prs.ts`, `weekly.ts`, `powerlifting.ts`). That keeps them correct when a session is edited or deleted, and needs no migrations. `meta.settings` gained `sex` and `bodyweightKg` for DOTS/Wilks.
+
 ## Planned
 
 | Phase | Table | Key fields |
 | --- | --- | --- |
-| 3 | (derived, not stored) | e1RM, PRs, rep-maxes, weekly sets per muscle are computed from sessions |
-| 3 | `prs` | id, athleteId, exerciseId, kind (weight/reps/e1rm/volume), value, sessionId, setId, achievedAt; recorded so celebrations fire once |
 | 4 | `programs` | id, athleteId/ownerId, name, weeks, phases, deloadEvery, status |
 | 4 | `programDays` | id, programId, week, day, order, scheduledDate, completedSessionId |
 | 4 | `plannedExercises` | id, programDayId, exerciseId, sets, repTarget, loadRule {type: fixed/pct1rm/rpe, value}, engine (linear/double/rpe), increments |

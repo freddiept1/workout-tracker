@@ -117,6 +117,19 @@ export function familyOf(id: string, all: Map<string, Exercise>): Exercise[] {
   return [...all.values()].filter((e) => !e.deletedAt && rootOf(e.id, all) === root);
 }
 
+/** An exercise and all its variations (and their variations), for rolling up strength trends. */
+export function withVariations(id: string, all: Map<string, Exercise>): Set<string> {
+  const ids = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const e of all.values()) {
+      if (e.parentId && ids.has(e.parentId) && !ids.has(e.id)) { ids.add(e.id); grew = true; }
+    }
+  }
+  return ids;
+}
+
 /** How many saved sessions each exercise appears in. */
 export function usageCounts(sessions: { exerciseIds: string[] }[]): Map<string, number> {
   const counts = new Map<string, number>();

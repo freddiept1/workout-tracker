@@ -5,10 +5,12 @@ interface Props {
   labels: string[];
   values: number[];
   unit: string;
+  kind?: 'line' | 'bar';
+  height?: number;
 }
 
-/** Line chart that takes its colours from the CSS variables, and redraws when light/dark mode changes. */
-export function ProgressChart({ labels, values, unit }: Props) {
+/** Line or bar chart that takes its colours from the CSS variables, and redraws when light/dark mode changes. */
+export function ProgressChart({ labels, values, unit, kind = 'line', height }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [scheme, setScheme] = useState(0);
 
@@ -23,18 +25,20 @@ export function ProgressChart({ labels, values, unit }: Props) {
     const css = getComputedStyle(document.documentElement);
     const color = (v: string) => css.getPropertyValue(v).trim();
     const chart = new Chart(canvas.current!, {
-      type: 'line',
+      type: kind,
       data: {
         labels,
         datasets: [{
           data: values,
           borderColor: color('--accent'),
-          backgroundColor: color('--accent-soft'),
+          backgroundColor: kind === 'bar' ? color('--accent') : color('--accent-soft'),
           pointBackgroundColor: color('--accent'),
           fill: true,
           tension: 0.3,
           pointRadius: 4,
-          pointHoverRadius: 6
+          pointHoverRadius: 6,
+          borderRadius: 4,
+          maxBarThickness: 22
         }]
       },
       options: {
@@ -51,7 +55,7 @@ export function ProgressChart({ labels, values, unit }: Props) {
       }
     });
     return () => chart.destroy();
-  }, [labels, values, unit, scheme]);
+  }, [labels, values, unit, scheme, kind]);
 
-  return <div className="chart-wrap"><canvas ref={canvas} /></div>;
+  return <div className="chart-wrap" style={height ? { height } : undefined}><canvas ref={canvas} /></div>;
 }

@@ -20,7 +20,7 @@ interface Props {
   draft: Draft | null;
   settings: Settings;
   onChange: (draft: Draft | null) => void;
-  onSaved: () => void;
+  onSaved: (sessionId: string) => void;
 }
 
 type SetRef = { ex: number; set: string };
@@ -151,7 +151,7 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
     const saved = await finishDraft(db, d, includeUnticked);
     if (!saved) return alert('Nothing to save yet: fill in and tick at least one set.');
     onChange(null);
-    onSaved();
+    onSaved(saved.id);
   }
 
   // Name of what's next after the rest (for the timer and notification).

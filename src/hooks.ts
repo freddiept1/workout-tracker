@@ -3,7 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { db } from './db/db';
 import { DEFAULT_SETTINGS, getSettings, listExercises, listSessions, listTemplates } from './db/repo';
-import type { Exercise } from './db/types';
+import type { Exercise, Session } from './db/types';
+import { findPRs, type PR } from './lib/prs';
 
 export const useSettings = () => useLiveQuery(() => getSettings(db), []) ?? DEFAULT_SETTINGS;
 export const useSessions = () => useLiveQuery(() => listSessions(db), []);
@@ -13,6 +14,11 @@ export const useTemplates = () => useLiveQuery(() => listTemplates(db), []);
 export function useExerciseMap(): Map<string, Exercise> {
   const all = useLiveQuery(() => db.exercises.toArray(), []);
   return useMemo(() => new Map((all ?? []).map((e) => [e.id, e])), [all]);
+}
+
+/** PRs for every session (oldest-first maths), recomputed when history changes. */
+export function usePRs(sessions: Session[] | undefined, exercises: Map<string, Exercise>): Map<string, PR[]> {
+  return useMemo(() => (sessions ? findPRs(sessions, exercises) : new Map()), [sessions, exercises]);
 }
 
 export function useExerciseNames(): string[] {

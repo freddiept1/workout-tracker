@@ -2,6 +2,28 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Phase 3: Analytics (2026-11-01)
+
+### Added
+- **Progress → Lifts:**
+  - **Estimated 1RM** chart for every lift. It uses the RTS RPE chart when you logged RPE, otherwise Epley, and leaves out sets over 12 reps. You can switch to the heaviest set instead.
+  - **Include variations** rolls Paused/SSB/Box Squat etc. into the main lift, charted as the best of each week.
+  - **Rep maxes:** best 1RM–12RM.
+  - That lift's **PR history**.
+- **PRs:** heaviest weight, rep PRs (heaviest for that many reps), estimated 1RM and session volume.
+  - Worked out from your history, so editing or deleting a workout keeps them right.
+  - A lift's first session is its baseline. Athletic work never counts, since it's about effort, not results.
+  - Finishing a workout with PRs shows a **celebration**. History shows 🏆 badges on sessions and sets.
+- **Progress → Week:** weekly recap with arrows to go back, covering:
+  - Sessions, working sets and tonnage vs the week before.
+  - PRs, grouped by lift.
+  - **Hard sets per muscle group** against a typical range. Sets at RPE 7+ or unrated count; main movers count a full set, helpers half.
+  - Athletic volume.
+  - A 12-week **tonnage** chart and a 16-week **consistency calendar**.
+- **Progress → Total:** best squat, bench and deadlift (actually lifted, and e1RM), the **total**, **DOTS** and **Wilks**, and each lift × bodyweight. Only competition lifts count; partials like block pulls don't.
+- **Lifter profile** in Settings (category and bodyweight) for DOTS and Wilks.
+- History shows tonnage for each session.
+
 ## Phase 2: Exercise library (2026-11-01)
 
 ### Added
