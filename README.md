@@ -39,6 +39,14 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 - Tap an exercise to edit it. Use **+ New exercise** to add your own, **Remove** to hide one (restore it from "Removed exercises"), or **Merge** to fold a duplicate into another exercise along with its history.
 - **Tempo:** tap the tempo chip on any lift during a workout. Set a default per exercise in the library.
 
+### Programs (Plan tab)
+- Build multi-week programs (weeks × days) or start from an example: Linear Strength Base, Powerlifting RPE Block, Athletic Power.
+- Each lift gets a method: **linear**, **double progression**, **RPE-based**, **% of 1RM** (per-week waves), or **fixed**. Athletic work is planned as reps @ effort.
+- Start the next workout from the Plan or Log tab. Every exercise shows its plan and why ("+2.5 kg: you hit 3 × 5 last time"), and you can type over any weight.
+- Missed days don't break anything: the program waits. **Skip** to move on. **Deloads** every N weeks halve the sets and take 10% off.
+- **Stalled lifts** (no e1RM gain for 3+ weeks of training) are flagged, with suggested fixes.
+- **Templates:** single-day routines. Save any past workout as one, or **Repeat** it, from History.
+
 ### Progress and PRs
 - **Lifts:**
   - Estimated 1RM chart (RPE-adjusted when you logged RPE, otherwise Epley), or the heaviest set.
@@ -51,7 +59,6 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 
 ### Other screens
 - **History**: every workout, newest first, with tonnage and PR badges. Tap one for details or to delete it.
-- **Templates**: your own routines, with one exercise per line.
 - **Settings** (gear icon): kg or lb (weights are converted), rest timer beep and notifications, bar/collar/plates, backup Export/Import.
 
 ## Your data

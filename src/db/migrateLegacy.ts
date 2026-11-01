@@ -4,7 +4,7 @@
 import { upgradeDraftV1 } from '../lib/draft';
 import { exerciseIdFor } from '../lib/ids';
 import { parseNumber, toKg } from '../lib/units';
-import type { Draft, Exercise, Session, SessionExercise, Settings, Template, Unit } from './types';
+import type { Draft, Exercise, Program, Session, SessionExercise, Settings, Template, Unit } from './types';
 import { DEFAULT_SETTINGS, ME } from './types';
 
 export const LEGACY_KEY = 'workoutTracker.v1';
@@ -27,6 +27,7 @@ export interface MigrationResult {
   exercises: Exercise[];
   sessions: Session[];
   templates: Template[];
+  programs?: Program[]; // only from backups (the old app had no programs)
   draft: Draft | null;
   sourceVersion: number | null;
   setCount: number;

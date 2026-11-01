@@ -2,6 +2,32 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Phase 4: Programs and auto-progression (2026-11-01)
+
+### Added
+- **Programs** (Plan tab → Programs): weeks × days of planned exercises. Each lift gets a method:
+  - **Linear:** add weight when every rep is hit. It jumps twice as far if the top RPE was 7 or less, holds at RPE 9.5+, and resets 10% after missing twice in a row.
+  - **Double progression:** climb a rep range, then add weight once every set reaches the top.
+  - **RPE-based:** the load is worked out from your latest e1RM and a target RPE, using the RPE chart.
+  - **% of 1RM:** a percentage per week for waves, of a 1RM you enter or your best estimated 1RM from the last 12 weeks.
+  - **Fixed load.**
+  - Athletic exercises are planned as sets × reps (and distance) @ effort.
+- **Explained suggestions:** in a program workout, every exercise shows its plan and why, e.g. "+2.5 kg: you hit 3 × 5 at 140 kg last time". The weights are pre-filled, so type over them to override.
+- **Schedule:**
+  - Workouts are done in order, so missing a day never breaks the program; it waits.
+  - **Skip** a workout to move on. **Deloads** every N weeks halve the sets and take 10% off.
+  - A grid shows what's done, skipped and next.
+  - Restart, archive or delete a program. A program finishes itself after its last workout.
+- **Example programs** to start from and edit: Linear Strength Base, Powerlifting RPE Block, and Athletic Power.
+- Your program's next workout appears on the Log tab, ready to start.
+- **Plateau detection:** a lift whose best e1RM is 3+ weeks old, despite at least 3 sessions since, is flagged on the Plan tab and its Progress chart. Fixes are suggested: a specific variation to rotate in, a different rep range, or a deload (sooner if your RPEs have been 9+).
+- **Repeat** any past workout, or **save it as a template**, from History.
+
+### Changed
+- The Templates tab is now **Plan**, with Programs and Templates inside.
+- Backups now include programs (format 5). Older backups still import.
+- Database schema version 2 adds a programs table. Existing data is untouched.
+
 ## Phase 3: Analytics (2026-11-01)
 
 ### Added

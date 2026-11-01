@@ -1,6 +1,7 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { deleteSession } from '../db/repo';
-import type { Unit } from '../db/types';
+import { deleteSession, saveTemplate } from '../db/repo';
+import type { Session, Unit } from '../db/types';
 import { useExerciseMap, usePRs, useSessions, useTemplates } from '../hooks';
 import { longDate } from '../lib/dates';
 import { commonTempo } from '../lib/draft';
@@ -9,12 +10,20 @@ import { isLiftSet, tonnageOf } from '../lib/strength';
 import { formatSet, modeOf, setBadge } from '../lib/tracking';
 import { fromKg } from '../lib/units';
 
-export function HistoryView({ unit }: { unit: Unit }) {
+export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Session) => void }) {
   const sessions = useSessions();
   const templates = useTemplates();
+  const programs = useLiveQuery(() => db.programs.toArray(), []);
   const exercises = useExerciseMap();
   const prs = usePRs(sessions, exercises);
   if (!sessions) return null;
+
+  async function saveAsTemplate(s: Session) {
+    const name = prompt('Name for the new template:', longDate(s.date));
+    if (!name?.trim()) return;
+    await saveTemplate(db, { name, exerciseIds: [...new Set(s.exercises.map((e) => e.exerciseId))] });
+    alert(`Saved “${name.trim()}”. Find it in Plan → Templates.`);
+  }
 
   if (!sessions.length) {
     return <p className="empty">No workouts yet.<br />Log one from the Log tab.</p>;
@@ -25,6 +34,7 @@ export function HistoryView({ unit }: { unit: Unit }) {
       <h2>{sessions.length} workout{sessions.length === 1 ? '' : 's'}</h2>
       {sessions.map((s) => {
         const template = templates?.find((t) => t.id === s.templateId);
+        const program = s.programDayId ? programs?.find((p) => p.id === s.programDayId!.split(':')[0]) : undefined;
         const setCount = s.exercises.reduce((n, ex) => n + ex.sets.length, 0);
         const sessionPRs = prs.get(s.id) ?? [];
         const prSets = new Set(sessionPRs.map((p) => p.setId));
@@ -39,6 +49,7 @@ export function HistoryView({ unit }: { unit: Unit }) {
                 {sessionPRs.length > 0 && <span className="pr-badge">🏆 {sessionPRs.length}</span>}
                 <br />
                 <span className="card-sub">
+                  {program ? `📋 ${program.name} ${s.programDayId!.split(':')[1]?.replace(/w(\d+)d(\d+)/, 'W$1 D$2')} · ` : ''}
                   {template ? template.name + ' · ' : ''}
                   {s.exercises.length} exercise{s.exercises.length === 1 ? '' : 's'} · {setCount} sets
                   {tonnage > 0 && ` · ${Math.round(fromKg(tonnage, unit)).toLocaleString()} ${unit}`}
@@ -81,10 +92,14 @@ export function HistoryView({ unit }: { unit: Unit }) {
                 );
               })}
               {s.notes && <p className="muted">{s.notes}</p>}
-              <button
-                type="button" className="danger small"
-                onClick={() => confirm('Delete this workout? This cannot be undone.') && deleteSession(db, s.id)}
-              >Delete workout</button>
+              <div className="row wrap history-actions">
+                <button type="button" className="small" onClick={() => onRepeat(s)}>Repeat</button>
+                <button type="button" className="ghost small" onClick={() => saveAsTemplate(s)}>Save as template</button>
+                <button
+                  type="button" className="danger small"
+                  onClick={() => confirm('Delete this workout? This cannot be undone.') && deleteSession(db, s.id)}
+                >Delete</button>
+              </div>
             </div>
           </details>
         );

@@ -113,6 +113,56 @@ export interface PlateSetup {
   plates: number[]; // available plate sizes (unlimited pairs)
 }
 
+// ---------- Programs (Phase 4) ----------
+
+/**
+ * How a planned lift's load is worked out each time:
+ * linear: start weight, +increment when every set hits its reps
+ * double: rep range; add weight once every set reaches the top of the range
+ * rpe: load from the latest e1RM and a target RPE (RPE chart)
+ * pct: a percentage of 1RM, per week (waves)
+ * fixed: the same load every time
+ */
+export type Method = 'linear' | 'double' | 'rpe' | 'pct' | 'fixed';
+
+export interface PlannedExercise {
+  id: string;
+  exerciseId: string;
+  sets: number;
+  reps: string; // "5" or a range "8-12"
+  method: Method;
+  startKg: number | null; // linear/double/fixed: first-time (or fixed) load
+  pcts: number[]; // pct: one value, or one per week
+  rpe: number | null; // rpe: target RPE
+  incrementKg: number; // linear/double
+  effort: number | null; // athletic work: planned effort %
+  distanceM: number | null; // sprints/carries
+  notes: string;
+}
+
+export interface ProgramDay {
+  id: string;
+  name: string;
+  exercises: PlannedExercise[];
+}
+
+export interface ProgramSlotLog {
+  sessionId: string | null;
+  date: string;
+  skipped: boolean;
+}
+
+export interface Program extends Owned {
+  name: string;
+  weeks: number;
+  deloadEvery: number | null; // e.g. 4 = weeks 4, 8, 12 are deloads
+  days: ProgramDay[];
+  maxes: { [exerciseId: string]: number }; // 1RMs entered for % work (kg); otherwise best recent e1RM
+  status: 'active' | 'completed' | 'archived';
+  startedAt: string | null;
+  log: { [slotKey: string]: ProgramSlotLog }; // "w1d1" -> what happened
+}
+
 export interface Settings {
   unit: Unit;
   restSound: boolean;
@@ -137,6 +187,13 @@ export interface Draft {
   notes: string;
   exercises: DraftExercise[];
   rest: RestTimer | null;
+  program?: DraftProgramRef | null; // set when the workout comes from a program (Phase 4)
+}
+
+export interface DraftProgramRef {
+  programId: string;
+  slot: string; // "w2d1"
+  label: string; // "Strength Block · Week 2 · Day A"
 }
 
 export interface RestTimer {
@@ -152,6 +209,7 @@ export interface DraftExercise {
   restSec: number | null; // override for this session; null = exercise default
   notes: string;
   tempo?: string; // applies to every set without its own tempo (added in Phase 2)
+  plan?: { summary: string; why: string } | null; // program prescription and its reasoning (Phase 4)
   sets: DraftSet[];
 }
 

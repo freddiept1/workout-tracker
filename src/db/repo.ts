@@ -1,10 +1,15 @@
 // All reads and writes go through here; UI code never touches Dexie tables directly.
-import { finishPlan, toSetEntry, upgradeDraftV1 } from '../lib/draft';
+import { shortDate } from '../lib/dates';
+import { blankSet, commonTempo, finishPlan, toSetEntry, upgradeDraftV1 } from '../lib/draft';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
+import { isDeloadWeek, loadRounder, nextSlot, prescribe, type HistoryEntry, type PrescribeInput, type Slot } from '../lib/programs';
+import { setE1RM } from '../lib/strength';
+import { formatWeight } from '../lib/units';
+import { addDays } from '../lib/weekly';
 import type { TrackerDB } from './db';
 import { LEGACY_KEY, isLegacyData, migrateLegacy, type MigrationResult } from './migrateLegacy';
 import { applyLibrary } from './seed';
-import type { Draft, DraftV1, Exercise, MigrationInfo, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
+import type { Draft, DraftExercise, DraftV1, Exercise, MigrationInfo, Program, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
 import { DEFAULT_SETTINGS, ME } from './types';
 
 export { DEFAULT_SETTINGS };
@@ -64,12 +69,13 @@ function starterData(now: string): MigrationResult {
  * does nothing (and returns false) if a migration already ran, so two app tabs can't both migrate.
  */
 async function writeAll(db: TrackerDB, data: MigrationResult, info: MigrationInfo, opts = { onlyIfNotMigrated: false }) {
-  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.meta], async () => {
+  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.programs, db.meta], async () => {
     if (opts.onlyIfNotMigrated && (await db.meta.get('migration'))) return false;
-    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear()]);
+    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear(), db.programs.clear()]);
     await db.exercises.bulkPut(data.exercises);
     await db.sessions.bulkPut(data.sessions);
     await db.templates.bulkPut(data.templates);
+    await db.programs.bulkPut(data.programs ?? []);
     await db.meta.bulkPut([
       { key: 'settings', value: data.settings },
       { key: 'draft', value: data.draft },
@@ -320,7 +326,7 @@ export async function updateExercise(db: TrackerDB, id: string, patch: Partial<P
  */
 export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked = true): Promise<Session | null> {
   const now = nowIso();
-  return db.transaction('rw', [db.exercises, db.sessions, db.meta], async () => {
+  return db.transaction('rw', [db.exercises, db.sessions, db.meta, db.programs], async () => {
     const exercises = new Map((await db.exercises.bulkGet(draft.exercises.map((e) => e.exerciseId))).filter(Boolean).map((e) => [e!.id, e!]));
     const plan = finishPlan(draft, exercises, includeUnticked);
     const kept: SessionExercise[] = draft.exercises
@@ -341,6 +347,7 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
       startedAt: draft.startedAt,
       endedAt: now,
       templateId: draft.templateId,
+      programDayId: draft.program ? `${draft.program.programId}:${draft.program.slot}` : null,
       notes: draft.notes.trim(),
       source: 'live',
       exercises: kept,
@@ -351,8 +358,135 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
     };
     await db.sessions.put(session);
     await db.meta.put({ key: 'draft', value: null });
+    // A program workout: tick it off, and finish the program after its last workout.
+    const program = draft.program ? await db.programs.get(draft.program.programId) : undefined;
+    if (program && draft.program) {
+      const log = { ...program.log, [draft.program.slot]: { sessionId: session.id, date: session.date, skipped: false } };
+      await db.programs.update(program.id, {
+        log, startedAt: program.startedAt ?? session.date, status: nextSlot({ ...program, log }) ? program.status : 'completed', updatedAt: now
+      });
+    }
     return session;
   });
+}
+
+// ---------- Programs ----------
+
+export async function listPrograms(db: TrackerDB): Promise<Program[]> {
+  return (await db.programs.where('athleteId').equals(ME).filter(alive).toArray()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export type ProgramInput = Pick<Program, 'name' | 'weeks' | 'deloadEvery' | 'days' | 'maxes'> & { id?: string };
+
+/** Creates or edits a program. Editing keeps its progress (log); a new one starts active. */
+export async function saveProgram(db: TrackerDB, input: ProgramInput): Promise<Program> {
+  if (!input.name.trim()) throw new Error('Give the program a name.');
+  if (!input.days.length) throw new Error('Add at least one day.');
+  const now = nowIso();
+  const existing = input.id ? await db.programs.get(input.id) : undefined;
+  const program: Program = {
+    status: 'active', startedAt: null, log: {}, createdAt: now,
+    ...existing,
+    id: existing?.id ?? newId(),
+    athleteId: ME,
+    name: input.name.trim(),
+    weeks: Math.max(1, Math.min(52, Math.round(input.weeks))),
+    deloadEvery: input.deloadEvery && input.deloadEvery > 1 ? input.deloadEvery : null,
+    days: input.days,
+    maxes: input.maxes,
+    updatedAt: now,
+    deletedAt: null
+  };
+  await db.programs.put(program);
+  return program;
+}
+
+export async function deleteProgram(db: TrackerDB, id: string) {
+  const now = nowIso();
+  await db.programs.update(id, { deletedAt: now, updatedAt: now });
+}
+
+export async function setProgramStatus(db: TrackerDB, id: string, status: Program['status']) {
+  await db.programs.update(id, { status, updatedAt: nowIso() });
+}
+
+/** Start again from week 1 (past sessions stay in History). */
+export async function restartProgram(db: TrackerDB, id: string) {
+  const now = nowIso();
+  await db.programs.update(id, { log: {}, status: 'active', startedAt: null, updatedAt: now });
+}
+
+/** Mark a workout as skipped, so the program moves on to the next one. */
+export async function skipProgramSlot(db: TrackerDB, id: string, slot: string, date: string) {
+  const p = await db.programs.get(id);
+  if (!p) return;
+  const log = { ...p.log, [slot]: { sessionId: null, date, skipped: true } };
+  const status = nextSlot({ ...p, log }) ? p.status : 'completed';
+  await db.programs.update(id, { log, status, updatedAt: nowIso() });
+}
+
+/** This exercise's recent sessions (newest first), working sets only. */
+async function recentHistory(db: TrackerDB, exerciseId: string, limit = 3): Promise<HistoryEntry[]> {
+  const sessions = (await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray()).filter((s) => s.athleteId === ME).sort(newestFirst);
+  return sessions.slice(0, limit).map((s) => ({
+    date: s.date,
+    sets: s.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets).filter((x) => x.type !== 'warmup')
+  }));
+}
+
+/** For % work: the 1RM entered in the program, otherwise the best e1RM of the last 12 weeks. */
+async function referenceMax(db: TrackerDB, program: Program, exerciseId: string, today: string): Promise<PrescribeInput['ref1RM']> {
+  if (program.maxes[exerciseId]) return { kg: program.maxes[exerciseId], source: '1RM you entered' };
+  const since = addDays(today, -84);
+  let best: { kg: number; date: string } | null = null;
+  for (const s of await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray()) {
+    if (s.date < since) continue;
+    for (const e of s.exercises) {
+      if (e.exerciseId !== exerciseId) continue;
+      for (const set of e.sets) {
+        if (set.type === 'warmup') continue;
+        const est = setE1RM(set)?.value ?? 0;
+        if (est && (!best || est > best.kg)) best = { kg: est, date: s.date };
+      }
+    }
+  }
+  return best ? { kg: best.kg, source: `best e1RM, ${shortDate(best.date)}` } : null;
+}
+
+/**
+ * The workout for one slot of a program: each planned exercise's sets pre-filled with the engine's
+ * prescription, and the reasoning attached so the session screen can show it.
+ */
+export async function buildProgramDraft(db: TrackerDB, program: Program, slot: Slot, settings: Settings, date: string): Promise<Draft> {
+  const day = program.days[slot.day];
+  const deload = isDeloadWeek(program, slot.week);
+  const unit = settings.unit;
+  const exercises: DraftExercise[] = [];
+  for (const plan of day.exercises) {
+    const exercise = await db.exercises.get(plan.exerciseId);
+    const history = await recentHistory(db, plan.exerciseId);
+    const rx = prescribe({
+      plan, exercise, week: slot.week, deload, history, unit,
+      ref1RM: plan.method === 'pct' ? await referenceMax(db, program, plan.exerciseId, date) : null,
+      roundKg: loadRounder(exercise, settings)
+    });
+    const tempo = commonTempo(history[0]?.sets ?? []) || exercise?.defaultTempo || '';
+    exercises.push({
+      id: newId(), exerciseId: plan.exerciseId, supersetGroup: null, restSec: null, tempo,
+      notes: plan.notes, plan: { summary: rx.summary, why: rx.why },
+      sets: rx.sets.map((s) => ({
+        ...blankSet(exercise),
+        weight: s.weightKg ? formatWeight(s.weightKg, unit) : '',
+        reps: String(s.reps),
+        effort: s.effort,
+        distance: s.distanceM != null ? String(s.distanceM) : ''
+      }))
+    });
+  }
+  return {
+    v: 2, unit, date, startedAt: nowIso(), templateId: null, notes: '', rest: null, exercises,
+    program: { programId: program.id, slot: slot.key, label: `${program.name} · Week ${slot.week}${deload ? ' (deload)' : ''} · ${day.name}` }
+  };
 }
 
 export async function deleteSession(db: TrackerDB, id: string) {
@@ -360,10 +494,10 @@ export async function deleteSession(db: TrackerDB, id: string) {
   await db.sessions.update(id, { deletedAt: now, updatedAt: now });
 }
 
-export async function saveTemplate(db: TrackerDB, input: { id?: string; name: string; exerciseNames: string[] }) {
+export async function saveTemplate(db: TrackerDB, input: { id?: string; name: string; exerciseNames?: string[]; exerciseIds?: string[] }) {
   await db.transaction('rw', [db.exercises, db.templates], async () => {
     const now = nowIso();
-    const ids = await ensureExercises(db, input.exerciseNames);
+    const ids = input.exerciseIds ?? (await ensureExercises(db, input.exerciseNames ?? []));
     const existing = input.id ? await db.templates.get(input.id) : undefined;
     const last = await db.templates.orderBy('order').last();
     await db.templates.put({
@@ -386,8 +520,8 @@ export async function deleteTemplate(db: TrackerDB, id: string) {
 
 // ---------- Backup ----------
 
-/** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft). Older formats still import. */
-export const EXPORT_FORMAT = 4;
+/** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft); 5 = Phase 4 (programs). Older formats still import. */
+export const EXPORT_FORMAT = 5;
 
 export interface ExportFile {
   app: 'workout-tracker';
@@ -397,6 +531,7 @@ export interface ExportFile {
   exercises: Exercise[];
   sessions: Session[];
   templates: Template[];
+  programs?: Program[]; // format 5+
   draft: Draft | DraftV1 | null;
 }
 
@@ -410,6 +545,7 @@ export async function exportAll(db: TrackerDB): Promise<ExportFile> {
     exercises: await db.exercises.toArray(),
     sessions: await db.sessions.toArray(),
     templates: await db.templates.toArray(),
+    programs: await db.programs.toArray(),
     draft: await getDraft(db)
   };
 }
@@ -428,6 +564,7 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
       exercises: f.exercises,
       sessions: f.sessions,
       templates: f.templates ?? [],
+      programs: f.programs ?? [],
       draft: (f.draft ?? null) as Draft | null, // a Phase 0 draft is upgraded by getDraft()
       sourceVersion: f.format,
       setCount: f.sessions.reduce((n, s) => n + s.exercises.reduce((m, e) => m + e.sets.length, 0), 0)

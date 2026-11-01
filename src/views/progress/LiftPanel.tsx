@@ -3,6 +3,8 @@ import { ProgressChart } from '../../components/ProgressChart';
 import type { Exercise, Session, Unit } from '../../db/types';
 import { shortDate } from '../../lib/dates';
 import { withVariations } from '../../lib/exerciseList';
+import { today } from '../../lib/ids';
+import { findPlateau } from '../../lib/plateau';
 import { bestByDate, e1rmMetric, metricFor } from '../../lib/progress';
 import { describePR, repMaxTable, type PR } from '../../lib/prs';
 import { MODES, modeOf } from '../../lib/tracking';
@@ -48,6 +50,8 @@ export function LiftPanel({ sessions, exercises, prs, unit }: Props) {
     [prs, ids]
   );
 
+  const plateau = useMemo(() => (lifting ? findPlateau(sessions, exerciseId, exercises, today()) : null), [lifting, sessions, exerciseId, exercises]);
+
   if (!logged.length) return <p className="empty">Log a few workouts and your progress will show up here.</p>;
 
   const isVolume = metric.combine === 'sum';
@@ -74,6 +78,13 @@ export function LiftPanel({ sessions, exercises, prs, unit }: Props) {
           </label>
         )}
       </div>
+
+      {plateau && (
+        <div className="card plateau-card">
+          <div className="card-title">⚠️ No e1RM gain for {plateau.weeks} weeks</div>
+          <ul>{plateau.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+        </div>
+      )}
 
       {points.length ? (
         <>

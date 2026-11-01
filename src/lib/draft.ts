@@ -1,5 +1,5 @@
 // Pure helpers for the in-progress workout (the draft).
-import type { Draft, DraftExercise, DraftSet, DraftV1, Exercise, SetEntry, Unit } from '../db/types';
+import type { Draft, DraftExercise, DraftSet, DraftV1, Exercise, Session, SetEntry, Unit } from '../db/types';
 import { exerciseIdFor, newId } from './ids';
 import { cleanInput, MODES, fieldText, isFilled, modeOf, type Field } from './tracking';
 import { formatWeight, parseNumber, toKg } from './units';
@@ -37,6 +37,18 @@ export function prefill(exercise: Exercise, lastSets: SetEntry[] | null, unit: U
     for (const f of fields) set[f] = fieldText(s, f, unit) || set[f];
     const tempo = s.tempo && s.tempo !== exerciseTempo ? s.tempo : '';
     return { ...set, type: s.type, side: s.side ?? null, tempo, effort: s.effortPct ?? null };
+  });
+}
+
+/** Repeat a past workout: same exercises and sets (values, types, sides, effort, tempo), nothing ticked. */
+export function exercisesFromSession(session: Session, exercises: Map<string, Exercise>, unit: Unit): DraftExercise[] {
+  return session.exercises.map((e) => {
+    const exercise = exercises.get(e.exerciseId) ?? ({ id: e.exerciseId } as Exercise);
+    const tempo = commonTempo(e.sets);
+    return {
+      id: newId(), exerciseId: e.exerciseId, supersetGroup: e.supersetGroup ?? null, restSec: e.restSec ?? null,
+      notes: e.notes ?? '', tempo, sets: prefill(exercise, e.sets, unit, tempo)
+    };
   });
 }
 

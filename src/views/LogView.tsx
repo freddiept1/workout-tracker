@@ -2,8 +2,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { db } from '../db/db';
-import { finishDraft, lastPerformance, updateExercise } from '../db/repo';
-import type { Draft, DraftExercise, DraftSet, Exercise, Settings, Template, Unit } from '../db/types';
+import { finishDraft, lastPerformance, listPrograms, updateExercise } from '../db/repo';
+import type { Draft, DraftExercise, DraftSet, Exercise, Program, Settings, Template, Unit } from '../db/types';
+import { isDeloadWeek, nextSlot, type Slot } from '../lib/programs';
 import { useExerciseMap, useTemplates } from '../hooks';
 import { unlockAudio } from '../lib/alerts';
 import { shortDate } from '../lib/dates';
@@ -21,12 +22,14 @@ interface Props {
   settings: Settings;
   onChange: (draft: Draft | null) => void;
   onSaved: (sessionId: string) => void;
+  onStartProgram: (program: Program, slot: Slot) => void;
 }
 
 type SetRef = { ex: number; set: string };
 
-export function LogView({ draft, settings, onChange, onSaved }: Props) {
+export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: Props) {
   const templates = useTemplates();
+  const programs = useLiveQuery(() => listPrograms(db).then((all) => all.filter((p) => p.status === 'active')), []);
   const exercises = useExerciseMap();
   const unit = settings.unit;
   const plates = settings.equipment[unit];
@@ -54,6 +57,19 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
   if (!draft) {
     return (
       <>
+        {programs?.map((p) => {
+          const next = nextSlot(p);
+          if (!next) return null;
+          return (
+            <div className="card template-card program-next" key={p.id}>
+              <div className="grow">
+                <div className="card-sub">📋 {p.name}</div>
+                <div className="card-title">Week {next.week}{isDeloadWeek(p, next.week) ? ' (deload)' : ''} · {p.days[next.day]?.name}</div>
+              </div>
+              <button type="button" onClick={() => onStartProgram(p, next)}>Start</button>
+            </div>
+          );
+        })}
         <h2>Start a workout</h2>
         {templates?.map((t) => (
           <div className="card template-card" key={t.id}>
@@ -166,6 +182,7 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
 
   return (
     <>
+      {d.program && <div className="program-banner">📋 {d.program.label}</div>}
       <div className="card row">
         <div className="grow">
           <label htmlFor="logDate">Date</label>
@@ -193,6 +210,12 @@ export function LogView({ draft, settings, onChange, onSaved }: Props) {
               <button type="button" className="ghost icon" aria-label="Exercise options" onClick={() => setMenuFor(i)}>⋯</button>
             </div>
             <LastTime exerciseId={entry.exerciseId} exercise={exercise} unit={d.unit} />
+            {entry.plan && (
+              <div className="plan-line">
+                <span>Plan: <b>{entry.plan.summary}</b></span>
+                <span className="plan-why">{entry.plan.why}</span>
+              </div>
+            )}
             {info.rating === 'rpe' && (
               <button type="button" className={'tempo-chip' + (entry.tempo ? ' on' : '')} onClick={() => setTempoFor(i)}>
                 {entry.tempo ? <>Tempo <b>{entry.tempo}</b></> : '+ Tempo'}

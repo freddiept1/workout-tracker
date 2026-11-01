@@ -537,6 +537,48 @@ dialog h2 { margin: 0; font-size: 1.25rem; }
 .cal-day.future { opacity: 0.3; }
 .bw-field { width: 120px; }
 
+/* ---------- Programs ---------- */
+
+.program-banner { margin-bottom: 12px; padding: 10px 14px; border-radius: var(--radius); background: var(--accent-soft); font-weight: 700; font-size: 0.9rem; }
+.plan-line { display: flex; flex-direction: column; gap: 2px; margin: -4px 2px 10px; padding: 8px 10px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--surface-2); font-size: 0.85rem; }
+.plan-line b { color: var(--accent); }
+.plan-why { color: var(--muted); font-size: 0.8rem; }
+.program-card { display: grid; gap: 12px; }
+.program-open, .list-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; min-height: 0; padding: 0;
+  border: 0; background: none; color: var(--text); text-align: left; font-weight: 400;
+}
+.list-card { padding: 14px; border: 1px solid var(--border); background: var(--surface); }
+.progress-bar { display: block; width: 100%; height: 6px; margin-top: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress-bar span { display: block; height: 100%; background: var(--accent); }
+.program-next { border-color: var(--accent); }
+.plateau-card ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.88rem; }
+.plateau-card li + li { margin-top: 6px; }
+.plateau { padding: 8px 0; border-top: 1px solid var(--border); }
+.plateau summary { cursor: pointer; font-size: 0.92rem; }
+.program-grid { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 0.8rem; table-layout: fixed; }
+.program-grid th { font-weight: 600; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.program-grid tbody th { text-align: left; width: 58px; }
+.program-grid td { height: 30px; border-radius: 6px; background: var(--surface-2); text-align: center; font-weight: 700; }
+.program-grid td.done { background: #2f9e44; color: #fff; }
+.program-grid td.skipped { color: var(--muted); }
+.program-grid td.next { outline: 2px solid var(--accent); color: var(--accent); }
+.deload-tag { display: block; font-size: 0.6rem; font-weight: 600; color: var(--accent); }
+.plan-preview { margin: 8px 0 12px; padding-left: 18px; font-size: 0.9rem; }
+.program-day { padding: 10px; }
+.day-name { font-weight: 700; }
+.plan-row { margin: 8px 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.plan-row.open { border-color: var(--accent); }
+.plan-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; border-radius: 0; background: var(--surface-2); color: var(--text); text-align: left; font-weight: 400; }
+.plan-head .grow { display: flex; flex-direction: column; gap: 2px; }
+.chev-small { color: var(--muted); }
+.plan-body { padding: 12px; }
+.pct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.pct-cell { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: 0.7rem; }
+.pct-cell input { min-height: 38px; padding: 6px; text-align: center; }
+.history-actions { margin-top: 8px; }
+.button-row { margin-bottom: 16px; }
+
 /* ---------- PR celebration ---------- */
 
 dialog.celebrate {

@@ -2,17 +2,19 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState, type ReactNode } from 'react';
 import { db } from './db/db';
 import { Celebration } from './components/Celebration';
-import { getDraft, getSettings, listSessions, saveDraft, startup, type StartupResult } from './db/repo';
-import type { Draft, Exercise, MigrationInfo } from './db/types';
-import { convertDraftUnit } from './lib/draft';
+import { buildProgramDraft, getDraft, getSettings, listSessions, saveDraft, startup, type StartupResult } from './db/repo';
+import type { Draft, Exercise, MigrationInfo, Program, Session } from './db/types';
+import { convertDraftUnit, exercisesFromSession } from './lib/draft';
+import { nowIso, today } from './lib/ids';
+import type { Slot } from './lib/programs';
 import { findPRs, type PR } from './lib/prs';
+import { PlanView } from './views/PlanView';
 import { saveFile } from './lib/saveFile';
 import { ExercisesView } from './views/ExercisesView';
 import { HistoryView } from './views/HistoryView';
 import { LogView } from './views/LogView';
 import { ProgressView } from './views/ProgressView';
 import { SettingsDialog } from './views/SettingsDialog';
-import { TemplatesView } from './views/TemplatesView';
 
 type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates';
 
@@ -58,7 +60,7 @@ function Recovery({ message, legacyRaw }: { message: string; legacyRaw: string |
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Templates' };
+const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Plan' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   // undefined until loaded: don't render (or convert the draft's units) against default settings.
@@ -106,6 +108,25 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
     }
   }
 
+  /** Replace the current workout (after asking, if one is in progress) and go to the Log tab. */
+  function beginWorkout(next: Draft) {
+    if (draft && !confirm('You have a workout in progress. Replace it with this one? The current one will be discarded.')) return;
+    setDraft(next);
+    show('log');
+  }
+
+  async function startProgram(program: Program, slot: Slot) {
+    beginWorkout(await buildProgramDraft(db, program, slot, settings!, today()));
+  }
+
+  async function repeatSession(session: Session) {
+    const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]));
+    beginWorkout({
+      v: 2, unit: unit!, date: today(), startedAt: nowIso(), templateId: session.templateId, notes: '', rest: null,
+      exercises: exercisesFromSession(session, exercises, unit!)
+    });
+  }
+
   if (draft === undefined || !settings || !unit) return null;
   const title = view === 'log' && draft ? 'Workout' : titles[view];
 
@@ -131,11 +152,11 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           </div>
         )}
         <section className="view active" key={view}>
-          {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={afterSave} />}
-          {view === 'history' && <HistoryView unit={unit} />}
+          {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={afterSave} onStartProgram={startProgram} />}
+          {view === 'history' && <HistoryView unit={unit} onRepeat={repeatSession} />}
           {view === 'progress' && <ProgressView settings={settings} />}
           {view === 'exercises' && <ExercisesView onMerged={loadDraft} />}
-          {view === 'templates' && <TemplatesView />}
+          {view === 'templates' && <PlanView unit={unit} onStart={startProgram} />}
         </section>
       </main>
 
@@ -148,7 +169,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
         <Tab view="exercises" current={view} onClick={show} label="Exercises">
           <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
         </Tab>
-        <Tab view="templates" current={view} onClick={show} label="Templates">
+        <Tab view="templates" current={view} onClick={show} label="Plan">
           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Tab>
       </nav>
