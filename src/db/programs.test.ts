@@ -67,7 +67,8 @@ describe('programs', () => {
     // Bench 100 × 5 -> e1RM 116.67; 70% = 81.67 -> 82.5 on the bar
     const d1 = await buildProgramDraft(db, p, dayB, settings, '2026-11-02');
     expect(d1.exercises[0].sets[0].weight).toBe('82.5');
-    expect(d1.exercises[0].plan?.why).toMatch(/70% of 116.7 kg \(best e1RM, 26 Oct\)/);
+    // Dates follow the device's language ("26 Oct" in the UK, "Oct 26" in the US).
+    expect(d1.exercises[0].plan?.why).toMatch(/70% of 116.7 kg \(best e1RM, (26 Oct|Oct 26)\)/);
     const withMax = await saveProgram(db, { ...programInput(), id: p.id, maxes: { 'bench-press': 130 } });
     const d2 = await buildProgramDraft(db, withMax, dayB, settings, '2026-11-02');
     expect(d2.exercises[0].sets[0].weight).toBe('90'); // 91 -> 90
