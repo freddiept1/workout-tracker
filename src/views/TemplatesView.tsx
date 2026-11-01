@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { db } from '../db/db';
-import { deleteTemplate, saveTemplate } from '../db/repo';
+import { addExampleWarmups, deleteTemplate, EXAMPLE_WARMUPS, saveTemplate } from '../db/repo';
 import { useExerciseMap, useTemplates } from '../hooks';
 
 interface Editing {
@@ -36,7 +36,10 @@ export function TemplatesView() {
         </div>
         <div>
           <label htmlFor="tplExercises">Exercises (one per line)</label>
-          <p className="hint">Names you've used before (or built-in ones like “20 m Sprint”) keep their type. New names are added as strength lifts.</p>
+          <p className="hint">
+            Names you've used before (or built-in ones like “20 m Sprint” or warm-ups like “Leg Swings” and “A-Skips”) keep their type.
+            Warm-up drills are shown as a tick list at the top of the workout. New names are added as strength lifts.
+          </p>
           <textarea
             id="tplExercises" rows={6} placeholder={'Squat\nBench Press'} autoCapitalize="words" value={editing.exercises}
             onChange={(e) => setEditing({ ...editing, exercises: e.target.value })}
@@ -51,6 +54,8 @@ export function TemplatesView() {
   }
 
   if (!templates) return null;
+  const names = new Set(templates.map((t) => t.name.toLowerCase()));
+  const missingWarmups = EXAMPLE_WARMUPS.filter(([n]) => !names.has(n.toLowerCase())).length;
   return (
     <>
       {!templates.length && <p className="empty">No templates yet.</p>}
@@ -73,6 +78,16 @@ export function TemplatesView() {
         </div>
       ))}
       <button type="button" className="full" onClick={() => setEditing({ name: '', exercises: '' })}>+ New template</button>
+      {missingWarmups > 0 && (
+        <div className="card warmup-promo">
+          <div className="card-title">Warm-up templates</div>
+          <p className="hint">
+            Lower body, upper body and sprint warm-ups made from the library's drills (leg swings, band pull-aparts, A-skips…).
+            Add one to any workout with “+ Add warm-up”, or put drills straight into your own templates.
+          </p>
+          <button type="button" className="ghost full" onClick={() => addExampleWarmups(db)}>+ Add example warm-ups</button>
+        </div>
+      )}
     </>
   );
 }

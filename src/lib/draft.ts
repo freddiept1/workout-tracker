@@ -1,7 +1,7 @@
 // Pure helpers for the in-progress workout (the draft).
 import type { Draft, DraftExercise, DraftSet, DraftV1, Exercise, Session, SetEntry, Unit } from '../db/types';
 import { exerciseIdFor, newId } from './ids';
-import { cleanInput, MODES, fieldText, isFilled, modeOf, type Field } from './tracking';
+import { cleanInput, MODES, fieldText, isDrill, isFilled, modeOf, type Field } from './tracking';
 import { formatWeight, parseNumber, toKg } from './units';
 
 export function blankSet(exercise?: Exercise): DraftSet {
@@ -13,8 +13,17 @@ export function blankSet(exercise?: Exercise): DraftSet {
 }
 
 export function newDraftExercise(exercise: Exercise, lastSets: SetEntry[] | null, unit: Unit): DraftExercise {
+  if (isDrill(exercise)) return newDrill(exercise);
   const tempo = commonTempo(lastSets ?? []) || exercise.defaultTempo || '';
   return { id: newId(), exerciseId: exercise.id, supersetGroup: null, restSec: null, notes: '', tempo, sets: prefill(exercise, lastSets, unit, tempo) };
+}
+
+/** A warm-up drill: one tick-off line with its target ("2 × 20 m"); nothing to type, never pre-filled. */
+export function newDrill(exercise: Exercise, target = exercise.defaultTarget ?? ''): DraftExercise {
+  return {
+    id: newId(), exerciseId: exercise.id, supersetGroup: null, restSec: null, notes: '', target,
+    sets: [{ ...blankSet(), type: 'warmup', distance: '' }]
+  };
 }
 
 /** The tempo most working sets used ('' if none). */
@@ -44,6 +53,7 @@ export function prefill(exercise: Exercise, lastSets: SetEntry[] | null, unit: U
 export function exercisesFromSession(session: Session, exercises: Map<string, Exercise>, unit: Unit): DraftExercise[] {
   return session.exercises.map((e) => {
     const exercise = exercises.get(e.exerciseId) ?? ({ id: e.exerciseId } as Exercise);
+    if (isDrill(exercise)) return newDrill(exercise, e.sets[0]?.notes ?? exercise.defaultTarget ?? '');
     const tempo = commonTempo(e.sets);
     return {
       id: newId(), exerciseId: e.exerciseId, supersetGroup: e.supersetGroup ?? null, restSec: e.restSec ?? null,
@@ -81,8 +91,14 @@ export function convertDraftUnit(draft: Draft, unit: Unit): Draft {
   return { ...draft, unit, exercises: draft.exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s, weight: convert(s.weight) })) })) };
 }
 
-/** The stored form of a typed set. The exercise's tempo applies unless the set has its own. */
-export function toSetEntry(s: DraftSet, exercise: Exercise | undefined, unit: Unit, completedAt: string, exerciseTempo = ''): SetEntry {
+/**
+ * The stored form of a typed set. The exercise's tempo applies unless the set has its own.
+ * Warm-up drills are stored as warm-up sets (never counted as training) with their target as the note.
+ */
+export function toSetEntry(s: DraftSet, exercise: Exercise | undefined, unit: Unit, completedAt: string, exerciseTempo = '', drillTarget = ''): SetEntry {
+  if (isDrill(exercise)) {
+    return { id: s.id, type: 'warmup', weightKg: null, reps: null, rpe: null, notes: drillTarget.trim() || undefined, completedAt: s.completedAt ?? completedAt };
+  }
   const mode = MODES[modeOf(exercise)];
   const uses = (f: Field) => mode.fields.includes(f);
   const n = (f: Field) => (uses(f) ? parseNumber(cleanInput(f, s[f])) : null);
@@ -108,19 +124,23 @@ export interface FinishPlan {
   unticked: number; // filled in but never ticked
 }
 
-/** Which sets a finished workout keeps: ticked sets, plus filled-in unticked ones if the user agrees. */
+/**
+ * Which sets a finished workout keeps: ticked sets, plus filled-in unticked ones if the user agrees.
+ * Warm-up drills only count when ticked; an unticked drill was simply skipped.
+ */
 export function finishPlan(draft: Draft, exercises: Map<string, Exercise>, includeUnticked: boolean): FinishPlan {
   let ticked = 0;
   let unticked = 0;
+  const drill = (ex: DraftExercise) => isDrill(exercises.get(ex.exerciseId));
   const filled = (ex: DraftExercise, s: DraftSet) => isFilled(s, modeOf(exercises.get(ex.exerciseId)));
   for (const ex of draft.exercises) {
     for (const s of ex.sets) {
       if (!filled(ex, s)) continue;
       if (s.done) ticked++;
-      else unticked++;
+      else if (!drill(ex)) unticked++;
     }
   }
-  return { include: (ex, s) => filled(ex, s) && (s.done || includeUnticked), ticked, unticked };
+  return { include: (ex, s) => filled(ex, s) && (s.done || (includeUnticked && !drill(ex))), ticked, unticked };
 }
 
 // ---------- Supersets ----------

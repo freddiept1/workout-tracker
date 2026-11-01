@@ -22,6 +22,11 @@ Updates install by themselves the next time you open the app with signal.
 - **Plate calculator** and **warm-up generator** in the ⋯ menu, using your bar and plates from Settings.
 - Your in-progress workout is saved as you type, even if the app closes. Tap **Finish** in the top bar when you're done.
 
+### Warm-ups
+- 50 warm-up drills (Exercises → Warm-ups), for the gym (leg swings, band pull-aparts, mobility, activation) and for athletic sessions (A/B-skips, high knees, butt kicks, carioca, strides…).
+- In a workout they form a **Warm-up** checklist at the top: tap each drill to tick it off. Nothing to type, and never counted as training.
+- Add a whole warm-up with **"+ Add warm-up"**, or put drills in any template or program day. Plan → Templates → **"+ Add example warm-ups"** gives you Lower Body, Upper Body and Sprint warm-ups to start from.
+
 ### Athletic work
 Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you did and how hard you went** (effort as % of max), not by times or distances achieved:
 

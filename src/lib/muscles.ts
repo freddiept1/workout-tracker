@@ -37,7 +37,8 @@ export const PATTERNS = {
   sprint: 'Sprint',
   jump: 'Jump / hop',
   throw: 'Throw',
-  carry: 'Carry / sled'
+  carry: 'Carry / sled',
+  warmup: 'Warm-up'
 } as const;
 
 export type Pattern = keyof typeof PATTERNS;

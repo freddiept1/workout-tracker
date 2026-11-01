@@ -8,7 +8,7 @@ import { longDate } from '../lib/dates';
 import { commonTempo } from '../lib/draft';
 import { describePR } from '../lib/prs';
 import { isLiftSet, tonnageOf } from '../lib/strength';
-import { formatSet, modeOf, setBadge } from '../lib/tracking';
+import { formatSet, isDrill, modeOf, setBadge } from '../lib/tracking';
 import { fromKg } from '../lib/units';
 
 export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Session) => void }) {
@@ -36,7 +36,10 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
       {sessions.map((s) => {
         const template = templates?.find((t) => t.id === s.templateId);
         const program = s.programDayId ? programs?.find((p) => p.id === s.programDayId!.split(':')[0]) : undefined;
-        const setCount = s.exercises.reduce((n, ex) => n + ex.sets.length, 0);
+        // Warm-up drills are shown as one line and left out of the exercise/set counts.
+        const drills = s.exercises.filter((ex) => isDrill(exercises.get(ex.exerciseId)));
+        const training = s.exercises.filter((ex) => !isDrill(exercises.get(ex.exerciseId)));
+        const setCount = training.reduce((n, ex) => n + ex.sets.length, 0);
         const sessionPRs = prs.get(s.id) ?? [];
         const prSets = new Set(sessionPRs.map((p) => p.setId));
         const tonnage = s.exercises.reduce(
@@ -52,7 +55,8 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
                 <span className="card-sub">
                   {program ? `📋 ${program.name} ${s.programDayId!.split(':')[1]?.replace(/w(\d+)d(\d+)/, 'W$1 D$2')} · ` : ''}
                   {template ? template.name + ' · ' : ''}
-                  {s.exercises.length} exercise{s.exercises.length === 1 ? '' : 's'} · {setCount} sets
+                  {drills.length > 0 && 'Warm-up ✓ · '}
+                  {training.length} exercise{training.length === 1 ? '' : 's'} · {setCount} sets
                   {tonnage > 0 && ` · ${Math.round(fromKg(tonnage, unit)).toLocaleString()} ${unit}`}
                 </span>
               </span>
@@ -61,7 +65,12 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
               </svg>
             </summary>
             <div className="workout-detail">
-              {s.exercises.map((ex) => {
+              {drills.length > 0 && (
+                <p className="warmup-summary">
+                  <b>✓ Warm-up</b> · {drills.map((ex) => exercises.get(ex.exerciseId)?.name ?? ex.exerciseId).join(', ')}
+                </p>
+              )}
+              {training.map((ex) => {
                 const exercise = exercises.get(ex.exerciseId);
                 const tempo = commonTempo(ex.sets);
                 const exPRs = sessionPRs.filter((p) => p.exerciseId === ex.exerciseId);

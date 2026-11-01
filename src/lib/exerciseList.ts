@@ -12,6 +12,7 @@ const byPattern = (...patterns: string[]) => (e: Exercise) => !!e.pattern && pat
 
 export const CATEGORIES: Category[] = [
   { id: 'fav', label: '★ Favourites', test: (e) => !!e.favourite },
+  { id: 'warmup', label: 'Warm-ups', test: (e) => modeOf(e) === 'drill' },
   { id: 'squat', label: 'Squat', test: byPattern('squat') },
   { id: 'hinge', label: 'Hinge', test: byPattern('hinge') },
   { id: 'push', label: 'Push', test: byPattern('push_h', 'push_v') },

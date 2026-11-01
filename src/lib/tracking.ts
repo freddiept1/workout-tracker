@@ -10,8 +10,8 @@ export interface ModeInfo {
   fields: Field[];
   /** Fields that must all be filled for a set to count. */
   required: Field[];
-  /** How hard the set was: RPE for lifting, % of max effort for athletic work. */
-  rating: 'rpe' | 'effort';
+  /** How hard the set was: RPE for lifting, % of max effort for athletic work; warm-up drills have none. */
+  rating: 'rpe' | 'effort' | 'none';
   restSec: number;
 }
 
@@ -21,10 +21,13 @@ export const MODES: Record<TrackingMode, ModeInfo> = {
   sprint: { label: 'Sprint', hint: 'distance × reps @ effort', fields: ['distance', 'reps'], required: ['distance', 'reps'], rating: 'effort', restSec: 120 },
   jump: { label: 'Jump / hop', hint: 'reps @ effort', fields: ['reps'], required: ['reps'], rating: 'effort', restSec: 90 },
   throw: { label: 'Throw', hint: 'ball kg × reps @ effort', fields: ['weight', 'reps'], required: ['reps'], rating: 'effort', restSec: 60 },
-  carry: { label: 'Carry / sled', hint: 'load × distance @ effort', fields: ['weight', 'distance'], required: ['distance'], rating: 'effort', restSec: 120 }
+  carry: { label: 'Carry / sled', hint: 'load × distance @ effort', fields: ['weight', 'distance'], required: ['distance'], rating: 'effort', restSec: 120 },
+  drill: { label: 'Warm-up drill', hint: 'ticked off, not tracked', fields: [], required: [], rating: 'none', restSec: 0 }
 };
 
-export const MODE_ORDER: TrackingMode[] = ['strength', 'reps', 'sprint', 'jump', 'throw', 'carry'];
+export const MODE_ORDER: TrackingMode[] = ['strength', 'reps', 'sprint', 'jump', 'throw', 'carry', 'drill'];
+
+export const isDrill = (ex: Pick<Exercise, 'tracking'> | undefined) => modeOf(ex) === 'drill';
 
 /** Unknown or missing modes (including types removed during Phase 1 development) count as strength. */
 export const modeOf = (ex: Pick<Exercise, 'tracking'> | undefined): TrackingMode =>
@@ -87,6 +90,7 @@ export function formatSet(set: SetEntry, mode: TrackingMode, unit: Unit): string
     case 'jump': text = `${reps} ${reps === 1 ? 'jump' : 'jumps'}`; break;
     case 'throw': text = w ? `${w} × ${reps}` : `${reps} throws`; break;
     case 'carry': text = [w, dist].filter(Boolean).join(' × '); break;
+    case 'drill': text = set.notes || '✓'; break;
   }
   if (set.side) text += ` (${set.side})`;
   if (set.rpe != null) text += ` @ ${set.rpe}`;

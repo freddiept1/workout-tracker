@@ -33,7 +33,18 @@ describe('library data', () => {
       expect(Object.keys(EQUIPMENT), e.name).toContain(e.equipment);
       expect(Object.keys(MODES), e.name).toContain(e.tracking ?? 'strength');
       for (const m of Object.keys(e.muscles)) expect(Object.keys(MUSCLES), `${e.name}: ${m}`).toContain(m);
-      expect(Object.values(e.muscles).reduce((a, b) => a + b!, 0), e.name).toBe(100);
+      // Warm-up drills are never counted as training, so they have no muscle split.
+      if (e.tracking === 'drill') expect(Object.keys(e.muscles), e.name).toHaveLength(0);
+      else expect(Object.values(e.muscles).reduce((a, b) => a + b!, 0), e.name).toBe(100);
+    }
+  });
+
+  it('has gym and athletic warm-up drills, each with a target', () => {
+    const drills = LIBRARY.filter((e) => e.tracking === 'drill');
+    expect(drills.length).toBeGreaterThan(40);
+    for (const d of drills) expect(d.defaultTarget, d.name).toBeTruthy();
+    for (const n of ['Leg Swings', 'Band Pull-Aparts', 'A-Skips', 'High Knees', 'Butt Kicks', 'Carioca', 'Strides', "World's Greatest Stretch"]) {
+      expect(names).toContain(n);
     }
   });
 

@@ -17,7 +17,8 @@ export type TrackingMode =
   | 'sprint' // distance × reps @ effort
   | 'jump' // reps @ effort (jumps, hops, bounds)
   | 'throw' // ball weight × reps @ effort
-  | 'carry'; // load × distance @ effort (carries, sleds)
+  | 'carry' // load × distance @ effort (carries, sleds)
+  | 'drill'; // warm-up drill: just ticked off against a target ("2 × 20 m"), never counted as training
 
 export type Side = 'L' | 'R';
 
@@ -49,6 +50,7 @@ export interface Exercise extends BaseRecord {
   restSec?: number | null; // default rest after a set; missing = default for the tracking mode
   defaultDistanceM?: number | null; // pre-filled distance, e.g. 10 for "10 m Sprint"
   defaultTempo?: string | null; // e.g. "3-1-X-0", pre-filled when the exercise is added to a workout
+  defaultTarget?: string | null; // warm-up drills: what to do, e.g. "2 × 20 m" or "10 each side"
   // Library tags (src/lib/muscles.ts has the vocabularies).
   parentId?: string | null; // the lift this is a variation of
   muscles?: MuscleShare[];
@@ -211,6 +213,7 @@ export interface DraftExercise {
   notes: string;
   tempo?: string; // applies to every set without its own tempo (added in Phase 2)
   plan?: { summary: string; why: string } | null; // program prescription and its reasoning (Phase 4)
+  target?: string; // warm-up drills: what to do this time
   sets: DraftSet[];
 }
 

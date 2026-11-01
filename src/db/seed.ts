@@ -13,6 +13,7 @@ export function libraryExercise(entry: LibraryEntry, now: string): Exercise {
     unilateral: entry.unilateral ?? false,
     defaultDistanceM: entry.defaultDistanceM ?? null,
     defaultTempo: entry.defaultTempo ?? null,
+    defaultTarget: entry.defaultTarget ?? null,
     parentId: entry.parent ? exerciseIdFor(entry.parent) : null,
     muscles: Object.entries(entry.muscles).map(([muscle, pct]) => ({ muscle, pct: pct! })),
     pattern: entry.pattern,
@@ -25,7 +26,7 @@ export function libraryExercise(entry: LibraryEntry, now: string): Exercise {
   };
 }
 
-const TAGS = ['parentId', 'muscles', 'pattern', 'equipment', 'mechanic', 'aliases', 'defaultTempo', 'defaultDistanceM', 'unilateral'] as const;
+const TAGS = ['parentId', 'muscles', 'pattern', 'equipment', 'mechanic', 'aliases', 'defaultTempo', 'defaultDistanceM', 'defaultTarget', 'unilateral'] as const;
 const isEmpty = (v: unknown) => v === undefined || v === null || (Array.isArray(v) && v.length === 0);
 
 /**

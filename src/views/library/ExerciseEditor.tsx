@@ -25,7 +25,8 @@ function toInput(e: Exercise): ExerciseInput {
   return {
     id: e.id, name: e.name, tracking: e.tracking ?? 'strength', unilateral: !!e.unilateral, parentId: e.parentId ?? null,
     muscles: e.muscles ?? [], pattern: e.pattern ?? null, equipment: e.equipment ?? null, mechanic: e.mechanic ?? null,
-    restSec: e.restSec ?? null, defaultTempo: e.defaultTempo ?? null, defaultDistanceM: e.defaultDistanceM ?? null
+    restSec: e.restSec ?? null, defaultTempo: e.defaultTempo ?? null, defaultDistanceM: e.defaultDistanceM ?? null,
+    defaultTarget: e.defaultTarget ?? null
   };
 }
 
@@ -169,6 +170,13 @@ export function ExerciseEditor({ open, exercise, usage, onClose, onMerged }: Pro
           <p className="hint">Used for weekly sets per muscle and muscle levels in later updates.</p>
         </div>
 
+        {form.tracking === 'drill' ? (
+          <div>
+            <label htmlFor="exTarget">What to do</label>
+            <input id="exTarget" placeholder="e.g. 2 × 20 m, or 10 each side" value={form.defaultTarget ?? ''} onChange={(e) => set({ defaultTarget: e.target.value })} />
+            <p className="hint">Shown next to the drill in your warm-up checklist.</p>
+          </div>
+        ) : (
         <div className="row">
           <div className="grow">
             <label htmlFor="exRest">Rest (seconds)</label>
@@ -187,6 +195,7 @@ export function ExerciseEditor({ open, exercise, usage, onClose, onMerged }: Pro
             </div>
           )}
         </div>
+        )}
 
         {error && <p className="error">{error}</p>}
         <button type="button" className="full" onClick={save}>{exercise ? 'Save changes' : 'Add exercise'}</button>

@@ -1,6 +1,7 @@
 // All reads and writes go through here; UI code never touches Dexie tables directly.
 import { shortDate } from '../lib/dates';
-import { blankSet, commonTempo, finishPlan, toSetEntry, upgradeDraftV1 } from '../lib/draft';
+import { blankSet, commonTempo, finishPlan, newDrill, toSetEntry, upgradeDraftV1 } from '../lib/draft';
+import { isDrill } from '../lib/tracking';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
 import { isDeloadWeek, loadRounder, nextSlot, prescribe, type HistoryEntry, type PrescribeInput, type Slot } from '../lib/programs';
 import { setE1RM } from '../lib/strength';
@@ -209,6 +210,7 @@ export interface ExerciseInput {
   restSec: number | null;
   defaultTempo: string | null;
   defaultDistanceM: number | null;
+  defaultTarget?: string | null; // warm-up drills
 }
 
 /** Creates or edits an exercise from the library screen. Throws a readable error if it isn't valid. */
@@ -239,6 +241,7 @@ export async function saveExercise(db: TrackerDB, input: ExerciseInput): Promise
       restSec: input.restSec,
       defaultTempo: input.defaultTempo?.trim() || null,
       defaultDistanceM: input.defaultDistanceM,
+      defaultTarget: input.defaultTarget?.trim() || null,
       updatedAt: now,
       deletedAt: null
     };
@@ -336,7 +339,7 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
         supersetGroup: ex.supersetGroup,
         restSec: ex.restSec,
         notes: ex.notes.trim() || undefined,
-        sets: ex.sets.filter((s) => plan.include(ex, s)).map((s) => toSetEntry(s, exercises.get(ex.exerciseId), draft.unit, now, ex.tempo))
+        sets: ex.sets.filter((s) => plan.include(ex, s)).map((s) => toSetEntry(s, exercises.get(ex.exerciseId), draft.unit, now, ex.tempo, ex.target))
       }))
       .filter((ex) => ex.sets.length);
     if (!kept.length) return null;
@@ -470,6 +473,10 @@ export async function buildProgramDraft(db: TrackerDB, program: Program, slot: S
       ref1RM: plan.method === 'pct' ? await referenceMax(db, program, plan.exerciseId, date) : null,
       roundKg: loadRounder(exercise, settings)
     });
+    if (exercise && isDrill(exercise)) {
+      exercises.push(newDrill(exercise, rx.summary === 'Warm-up' ? '' : rx.summary));
+      continue;
+    }
     const tempo = commonTempo(history[0]?.sets ?? []) || exercise?.defaultTempo || '';
     exercises.push({
       id: newId(), exerciseId: plan.exerciseId, supersetGroup: null, restSec: null, tempo,
@@ -511,6 +518,28 @@ export async function saveTemplate(db: TrackerDB, input: { id?: string; name: st
       deletedAt: null
     });
   });
+}
+
+/** Ready-made warm-ups using the library's drills. Edit them like any template. */
+export const EXAMPLE_WARMUPS: [string, string[]][] = [
+  ['Lower Body Warm-up', ['Easy Bike', 'Leg Swings', 'Lateral Leg Swings', '90/90 Hip Switches', "World's Greatest Stretch",
+    'Knee-to-Wall Ankle Mobility', 'Bodyweight Glute Bridge', 'Banded Lateral Walks', 'Bodyweight Squats']],
+  ['Upper Body Warm-up', ['Easy Row', 'Arm Circles', 'Band Pass-Throughs', 'Thoracic Open Books', 'Band Pull-Aparts',
+    'Band Face Pull', 'Band External Rotations', 'Scapular Push-ups']],
+  ['Sprint Warm-up', ['Walking Knee Hugs', 'Walking Quad Stretch', 'Frankensteins', 'Leg Swings', 'Lateral Leg Swings',
+    'A-Skips', 'B-Skips', 'High Knees', 'Butt Kicks', 'Carioca', 'Lateral Shuffle', 'Ankle Hops', 'Wall Drill', 'Strides']]
+];
+
+/** Adds the example warm-up templates that aren't already there (by name). Returns how many were added. */
+export async function addExampleWarmups(db: TrackerDB): Promise<number> {
+  const existing = new Set((await listTemplates(db)).map((t) => t.name.toLowerCase()));
+  let added = 0;
+  for (const [name, exerciseNames] of EXAMPLE_WARMUPS) {
+    if (existing.has(name.toLowerCase())) continue;
+    await saveTemplate(db, { name, exerciseNames });
+    added++;
+  }
+  return added;
 }
 
 export async function deleteTemplate(db: TrackerDB, id: string) {

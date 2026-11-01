@@ -660,6 +660,33 @@ dialog.celebrate::backdrop { background: rgba(0, 0, 0, 0.6); }
 .confetti span { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: fall 1.8s ease-in forwards; }
 @keyframes fall { to { transform: translateY(520px) rotate(540deg); opacity: 0; } }
 
+/* ---------- Warm-up checklist ---------- */
+
+.warmup-card { padding: 12px 6px 6px; border-left: 4px solid var(--accent); }
+.warmup-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 8px 6px; }
+.warmup-count { font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+.warmup-count.all { color: var(--accent); }
+.warmup-list { margin: 0; padding: 0; list-style: none; }
+.warmup-list li { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--border); }
+.warmup-row {
+  display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; min-height: 56px; padding: 8px;
+  border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; font-weight: 400;
+}
+.warmup-check {
+  display: grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid var(--border); color: transparent; transition: background 0.15s, border-color 0.15s;
+}
+.warmup-check.on { background: var(--done); border-color: var(--done); color: #fff; }
+.warmup-text { display: flex; flex-direction: column; min-width: 0; }
+.warmup-name { font-weight: 600; }
+.warmup-target { font-size: 0.82rem; color: var(--muted); }
+.warmup-list li.done .warmup-name { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.warmup-remove { flex-shrink: 0; opacity: 0.6; }
+.add-warmup { margin-bottom: 12px; border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.warmup-summary { margin: 0 0 12px; font-size: 0.88rem; color: var(--muted); }
+.warmup-summary b { color: var(--accent); }
+.warmup-promo { margin-top: 16px; }
+
 /* ---------- Brand and streak ---------- */
 
 .wordmark { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 0 8px; color: var(--text); }

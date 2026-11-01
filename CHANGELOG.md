@@ -2,6 +2,24 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Warm-ups (2026-11-01)
+
+### Added
+- **Warm-up drills:** a new exercise type that's simply ticked off against a target ("2 × 20 m", "10 each side").
+  - No weights or reps to enter, and no rest timer.
+  - Never counted towards PRs, volume, hard sets or progress charts.
+  - Drills you didn't tick are just left out when you finish, without a question.
+- **50 drills in the library** (Exercises → Warm-ups):
+  - Pulse raisers: easy bike/row, jump rope.
+  - Mobility: leg swings, 90/90s, World's Greatest Stretch, ankle mobility, couch stretch, pass-throughs…
+  - Activation: band pull-aparts, face pulls, external rotations, glute bridges, lateral walks, dead bugs…
+  - Athletic: A/B-skips, high knees, butt kicks, carioca, shuffles, wall drill, strides…
+- **In a workout,** drills group into one **Warm-up** checklist card at the top, with an "x/y done" count. Tap a row to tick it.
+- **"+ Add warm-up"** in any workout drops in a warm-up template. Drills added from "+ Add exercise" also go to the warm-up at the top.
+- **Example warm-up templates** (Plan → Templates → "+ Add example warm-ups"): Lower Body, Upper Body and Sprint. Edit them like any template, or put drills straight into your own templates and program days.
+- History shows "✓ Warm-up" and which drills you did, separate from your training.
+- Each drill's target can be edited in the Exercises tab, and per program day in the program editor.
+
 ## New look (2026-11-01)
 
 ### Added

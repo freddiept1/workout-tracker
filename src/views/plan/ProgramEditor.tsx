@@ -113,6 +113,7 @@ export function ProgramEditor({ open, initial, unit, onClose }: Props) {
 }
 
 function planSummary(plan: PlannedExercise, exercise: Exercise | undefined, unit: Unit): string {
+  if (modeOf(exercise) === 'drill') return `Warm-up · ${plan.notes || exercise?.defaultTarget || 'tick off'}`;
   if (MODES[modeOf(exercise)].rating === 'effort') {
     return `${plan.sets} × ${plan.distanceM ? `${plan.distanceM} m × ` : ''}${plan.reps}${plan.effort ? ` @ ${plan.effort}%` : ''}`;
   }
@@ -164,7 +165,21 @@ function PlanRow({ plan, exercise, weeks, unit, max, expanded, onToggle, onChang
         </span>
         <span className="chev-small">{expanded ? '▴' : '▾'}</span>
       </button>
-      {expanded && (
+      {expanded && modeOf(exercise) === 'drill' && (
+        <div className="stack plan-body">
+          <div>
+            <label className="sub" htmlFor={plan.id + 'target'}>What to do</label>
+            <input id={plan.id + 'target'} placeholder={exercise?.defaultTarget ?? 'e.g. 2 × 20 m'} value={plan.notes} onChange={(e) => onChange({ notes: e.target.value })} />
+            <p className="hint">Warm-up drill: ticked off in the workout, never counted as training.</p>
+          </div>
+          <div className="row">
+            <button type="button" className="ghost small grow" onClick={() => onMove(-1)}>Move up</button>
+            <button type="button" className="ghost small grow" onClick={() => onMove(1)}>Move down</button>
+            <button type="button" className="danger small grow" onClick={onRemove}>Remove</button>
+          </div>
+        </div>
+      )}
+      {expanded && modeOf(exercise) !== 'drill' && (
         <div className="stack plan-body">
           {!athletic && (
             <div>

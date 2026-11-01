@@ -5,7 +5,8 @@
 import type { Equipment, Muscle, Pattern } from '../lib/muscles';
 import type { TrackingMode } from './types';
 
-export const LIBRARY_VERSION = 1;
+/** 1 = Phase 2 library; 2 = warm-up drills. */
+export const LIBRARY_VERSION = 2;
 
 type Split = Partial<Record<Muscle, number>>;
 
@@ -21,6 +22,7 @@ export interface LibraryEntry {
   aliases?: string[]; // extra search words
   defaultTempo?: string;
   defaultDistanceM?: number;
+  defaultTarget?: string; // warm-up drills
 }
 
 // ---------- Muscle splits ----------
@@ -128,6 +130,9 @@ const slHop = jump('Single-Leg Hop', HOP, { unilateral: true });
 const throwEx = (name: string, muscles: Split, extra: Partial<LibraryEntry> = {}) =>
   lift(name, 'throw', 'medicine_ball', muscles, { tracking: 'throw', ...extra });
 const carry = (name: string, equipment: Equipment, muscles: Split) => lift(name, 'carry', equipment, muscles, { tracking: 'carry' });
+/** A warm-up drill: ticked off against a target, never counted as training (so no muscle split). */
+const drill = (name: string, defaultTarget: string, equipment: Equipment = 'none', aliases?: string[]): LibraryEntry =>
+  ({ name, pattern: 'warmup', equipment, mechanic: 'isolation', muscles: {}, tracking: 'drill', defaultTarget, aliases });
 
 export const LIBRARY: LibraryEntry[] = [
   // Squat family
@@ -324,5 +329,61 @@ export const LIBRARY: LibraryEntry[] = [
   carry("Farmer's Carry", 'dumbbell', { forearms: 35, traps: 30, abs: 15, glutes: 10, quads: 10 }),
   carry('Sled Push', 'sled', { quads: 45, glutes: 30, calves: 15, abs: 10 }),
   carry('Sled Drag', 'sled', { glutes: 30, hamstrings: 30, quads: 25, calves: 15 }),
-  carry('Resisted Sled Sprint', 'sled', { glutes: 30, hamstrings: 25, quads: 25, calves: 20 })
+  carry('Resisted Sled Sprint', 'sled', { glutes: 30, hamstrings: 25, quads: 25, calves: 20 }),
+
+  // ---------- Warm-up drills (library v2) ----------
+  // Raise the pulse
+  drill('Easy Bike', '5 min easy', 'machine', ['warm up', 'cardio']),
+  drill('Easy Row', '5 min easy', 'machine', ['rower', 'warm up', 'cardio']),
+  drill('Jump Rope', '2 min', 'none', ['skipping rope']),
+  drill('Jumping Jacks', '30'),
+  // Mobility
+  drill('Leg Swings', '10 each leg', 'none', ['front to back leg swings']),
+  drill('Lateral Leg Swings', '10 each leg', 'none', ['side to side leg swings']),
+  drill('Hip Circles', '10 each way'),
+  drill('90/90 Hip Switches', '8 each side', 'none', ['90 90']),
+  drill("World's Greatest Stretch", '5 each side', 'none', ['wgs']),
+  drill('Spiderman Lunge', '5 each side'),
+  drill('Cossack Squat', '6 each side'),
+  drill('Deep Squat Hold', '30 s', 'none', ['prying squat']),
+  drill('Knee-to-Wall Ankle Mobility', '10 each side', 'none', ['ankle rocks', 'dorsiflexion']),
+  drill('Couch Stretch', '30 s each side', 'none', ['hip flexor stretch']),
+  drill('Cat-Cow', '10'),
+  drill('Thoracic Open Books', '8 each side', 'none', ['t-spine rotation']),
+  drill('Inchworms', '5'),
+  drill('Arm Circles', '10 each way'),
+  drill('Band Pass-Throughs', '15', 'band', ['shoulder dislocates', 'dowel pass throughs']),
+  drill('Wall Slides', '10'),
+  // Activation
+  drill('Band Pull-Aparts', '2 × 15', 'band', ['pull aparts']),
+  drill('Band Face Pull', '15', 'band'),
+  drill('Band External Rotations', '15 each arm', 'band', ['rotator cuff']),
+  drill('Y-T-W Raises', '8 each letter', 'none', ['ytw']),
+  drill('Scapular Push-ups', '10', 'none', ['scap push ups']),
+  drill('Scapular Pull-ups', '8', 'none', ['scap pull ups']),
+  drill('Bodyweight Glute Bridge', '15', 'none', ['glute activation']),
+  drill('Banded Lateral Walks', '10 each way', 'band', ['crab walks']),
+  drill('Monster Walks', '10 steps forward and back', 'band'),
+  drill('Clamshells', '15 each side', 'band'),
+  drill('Bird Dog', '8 each side'),
+  drill('Dead Bug', '8 each side'),
+  drill('Plank', '30 s'),
+  drill('Bodyweight Squats', '15', 'none', ['air squats']),
+  drill('Bodyweight Walking Lunge', '10 each leg'),
+  // Athletic / dynamic
+  drill('A-Skips', '2 × 20 m', 'none', ['a skip']),
+  drill('B-Skips', '2 × 20 m', 'none', ['b skip']),
+  drill('High Knees', '2 × 20 m'),
+  drill('Butt Kicks', '2 × 20 m', 'none', ['heel flicks']),
+  drill('Carioca', '2 × 20 m each way', 'none', ['grapevine']),
+  drill('Lateral Shuffle', '2 × 20 m each way'),
+  drill('Backpedal', '2 × 20 m'),
+  drill('Power Skips', '2 × 20 m', 'none', ['skips for height']),
+  drill('Straight-Leg Run', '2 × 20 m', 'none', ['scissor run']),
+  drill('Walking Knee Hugs', '10 each leg'),
+  drill('Walking Quad Stretch', '10 each leg'),
+  drill('Frankensteins', '10 each leg', 'none', ['toy soldiers', 'straight leg kicks']),
+  drill('Ankle Hops', '2 × 20', 'none', ['ankle pogos']),
+  drill('Wall Drill', '3 × 10 each leg', 'none', ['acceleration wall drill', 'wall march']),
+  drill('Strides', '3 × 60 m, building to 90%', 'none', ['build ups', 'build-up runs'])
 ];

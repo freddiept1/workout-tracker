@@ -12,7 +12,9 @@ import { unlockAudio } from '../lib/alerts';
 import { shortDate } from '../lib/dates';
 import { afterTick, blankSet, finishPlan, groupLetters, linkWithNext, move, newDraftExercise, unlink } from '../lib/draft';
 import { newId, nowIso, today } from '../lib/ids';
-import { cleanInput, fieldLabel, formatSet, inputMode, isFilled, MODES, modeOf, restFor, setBadge } from '../lib/tracking';
+import { cleanInput, fieldLabel, formatSet, inputMode, isDrill, isFilled, MODES, modeOf, restFor, setBadge } from '../lib/tracking';
+import { Sheet } from '../components/Sheet';
+import { WarmupCard } from './log/WarmupCard';
 import { ExerciseMenu } from './log/ExerciseMenu';
 import { ExercisePicker } from './log/ExercisePicker';
 import { RestTimer } from './log/RestTimer';
@@ -42,6 +44,7 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const [ratingFor, setRatingFor] = useState<SetRef | null>(null);
   const [tempoFor, setTempoFor] = useState<number | null>(null);
   const [swapFor, setSwapFor] = useState<number | null>(null);
+  const [warmupPicker, setWarmupPicker] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
   async function entryFor(ex: Exercise, u: Unit): Promise<DraftExercise> {
@@ -100,8 +103,24 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const findSet = (ref: SetRef | null) => (ref ? d.exercises[ref.ex]?.sets.find((s) => s.id === ref.set) ?? null : null);
 
   async function addExercise(ex: Exercise) {
-    onChange({ ...d, exercises: [...d.exercises, await entryFor(ex, d.unit)] });
+    const entry = await entryFor(ex, d.unit);
+    // Warm-up drills go with the warm-up at the top; everything else at the end.
+    if (isDrill(ex)) return addDrills([entry]);
+    onChange({ ...d, exercises: [...d.exercises, entry] });
     setTimeout(() => [...document.querySelectorAll('.exercise-card')].pop()?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  /** Puts drills after the warm-up drills already at the top of the workout. */
+  function addDrills(drills: DraftExercise[]) {
+    const lead = d.exercises.findIndex((e) => !isDrill(exercises.get(e.exerciseId)));
+    const at = lead < 0 ? d.exercises.length : lead;
+    onChange({ ...d, exercises: [...d.exercises.slice(0, at), ...drills, ...d.exercises.slice(at)] });
+  }
+
+  async function addWarmupTemplate(t: Template) {
+    const list = t.exercises.map((e) => exercises.get(e.exerciseId)).filter((e): e is Exercise => !!e);
+    addDrills(await Promise.all(list.map((e) => entryFor(e, d.unit))));
+    setWarmupPicker(false);
   }
 
   /**
@@ -184,6 +203,8 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const sheetExercise = setSheet ? exercises.get(d.exercises[setSheet.ex]?.exerciseId) : undefined;
   const ratingSet = findSet(ratingFor);
   const ratingExercise = ratingFor ? exercises.get(d.exercises[ratingFor.ex]?.exerciseId) : undefined;
+  const hasDrills = d.exercises.some((e) => isDrill(exercises.get(e.exerciseId)));
+  const warmupTemplates = (templates ?? []).filter((t) => t.exercises.length && t.exercises.every((e) => isDrill(exercises.get(e.exerciseId))));
 
   return (
     <>
@@ -198,9 +219,28 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
         </button>
       </div>
 
+      {!hasDrills && warmupTemplates.length > 0 && (
+        <button type="button" className="ghost full add-warmup" onClick={() => setWarmupPicker(true)}>+ Add warm-up</button>
+      )}
+
       {d.exercises.map((entry, i) => {
         const exercise = exercises.get(entry.exerciseId);
         const mode = modeOf(exercise);
+        // Consecutive warm-up drills show as one checklist card, drawn at the first of them.
+        if (mode === 'drill') {
+          if (i > 0 && isDrill(exercises.get(d.exercises[i - 1].exerciseId))) return null;
+          let end = i;
+          while (end < d.exercises.length && isDrill(exercises.get(d.exercises[end].exerciseId))) end++;
+          return (
+            <WarmupCard
+              key={entry.id}
+              entries={d.exercises.slice(i, end)}
+              exercises={exercises}
+              onTick={(e) => tick(d.exercises.indexOf(e), e.sets[0])}
+              onRemove={(e) => onChange({ ...d, exercises: d.exercises.filter((x) => x.id !== e.id) })}
+            />
+          );
+        }
         const info = MODES[mode];
         const letter = entry.supersetGroup ? letters.get(entry.supersetGroup) : null;
         const cols = `30px ${exercise?.unilateral ? '40px ' : ''}${info.fields.map(() => 'minmax(0,1fr)').join(' ')} 52px 44px`;
@@ -282,6 +322,16 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
       <RestTimer rest={d.rest} sound={settings.restSound} nextName={nextName} onChange={(rest) => onChange({ ...d, rest })} />
 
       <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={addExercise} />
+
+      <Sheet open={warmupPicker} title="Add a warm-up" onClose={() => setWarmupPicker(false)}>
+        {warmupTemplates.map((t) => (
+          <button type="button" key={t.id} className="card list-card" onClick={() => addWarmupTemplate(t)}>
+            <span className="card-title">{t.name}</span>
+            <span className="card-sub">{t.exercises.map((e) => exercises.get(e.exerciseId)?.name).join(' · ')}</span>
+          </button>
+        ))}
+        <p className="hint">Single drills are in “+ Add exercise” under Warm-ups. Make your own warm-ups in Plan → Templates.</p>
+      </Sheet>
 
       <ExercisePicker
         open={swapFor !== null}

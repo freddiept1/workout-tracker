@@ -120,6 +120,12 @@ export function prescribe(input: PrescribeInput): Prescription {
   let sets = Math.max(1, plan.sets);
   const mode = modeOf(exercise);
 
+  // Warm-up drill: just the target to tick off. The program's note overrides the drill's default.
+  if (mode === 'drill') {
+    const target = plan.notes.trim() || exercise?.defaultTarget || '';
+    return { sets: [{ weightKg: null, reps: 0, rpe: null, effort: null, distanceM: null }], summary: target || 'Warm-up', why: 'Warm-up: tick it off when done.' };
+  }
+
   // Athletic work: what to do and how hard, no load maths.
   if (MODES[mode].rating === 'effort') {
     if (deload) sets = Math.max(1, Math.round(sets / 2));
@@ -244,6 +250,9 @@ export function loadRounder(exercise: Exercise | undefined, settings: Settings):
 
 /** A sensible default plan for an exercise added to a program day. */
 export function defaultPlan(exercise: Exercise | undefined, id: string): PlannedExercise {
+  if (modeOf(exercise) === 'drill') {
+    return { id, exerciseId: exercise?.id ?? '', sets: 1, reps: '1', method: 'fixed', startKg: null, pcts: [], rpe: null, incrementKg: 0, effort: null, distanceM: null, notes: exercise?.defaultTarget ?? '' };
+  }
   const athletic = MODES[modeOf(exercise)].rating === 'effort';
   const isolation = exercise?.mechanic === 'isolation';
   const lower = ['squat', 'hinge', 'olympic'].includes(exercise?.pattern ?? '');

@@ -7,7 +7,7 @@ import { today } from '../../lib/ids';
 import { findPlateau } from '../../lib/plateau';
 import { bestByDate, e1rmMetric, metricFor } from '../../lib/progress';
 import { describePR, repMaxTable, type PR } from '../../lib/prs';
-import { MODES, modeOf } from '../../lib/tracking';
+import { isDrill, MODES, modeOf } from '../../lib/tracking';
 import { formatWeight, round } from '../../lib/units';
 
 interface Props {
@@ -25,11 +25,14 @@ export function LiftPanel({ sessions, exercises, prs, unit }: Props) {
   // Only offer exercises that have actually been logged.
   const logged = useMemo(() => {
     const ids = new Set(sessions.flatMap((s) => s.exerciseIds));
-    return [...ids].map((id) => ({ id, name: exercises.get(id)?.name ?? id })).sort((a, b) => a.name.localeCompare(b.name));
+    return [...ids]
+      .filter((id) => !isDrill(exercises.get(id))) // warm-up drills aren't tracked
+      .map((id) => ({ id, name: exercises.get(id)?.name ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [sessions, exercises]);
 
   // Default to the first exercise of the latest workout (usually the main lift).
-  const exerciseId = logged.some((e) => e.id === picked) ? picked : sessions[0]?.exerciseIds[0] ?? '';
+  const exerciseId = logged.some((e) => e.id === picked) ? picked : sessions[0]?.exerciseIds.find((id) => !isDrill(exercises.get(id))) ?? logged[0]?.id ?? '';
   const exercise = exercises.get(exerciseId);
   const mode = modeOf(exercise);
   const lifting = mode === 'strength';

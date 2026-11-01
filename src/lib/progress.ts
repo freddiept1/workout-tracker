@@ -31,6 +31,8 @@ export function metricFor(mode: TrackingMode, unit: Unit): Metric {
       return { label: 'Total throws', unit: 'throws', combine: 'sum', value: (s) => s.reps ?? null };
     case 'carry':
       return { label: 'Heaviest load', unit, combine: 'max', value: (s) => (s.weightKg ? load(s) : null) };
+    case 'drill': // warm-ups aren't charted (Progress leaves them out); kept for completeness
+      return { label: 'Times done', unit: '', combine: 'sum', value: () => 1 };
   }
 }
 
