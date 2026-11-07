@@ -37,6 +37,9 @@ The app signs in with a code typed into the app (not a link), because links open
    - the **Publishable key** (starts `sb_publishable_`), or on older projects the **anon public** key.
 3. Paste both to Claude. They're safe to share and ship in the app. **Never** share the **secret** or **service_role** key.
 
+## Updating the cloud
+When an app update changes the cloud (Claude will say so), open **SQL Editor**, paste the whole of `supabase/schema.sql` again and click **Run**. It's written to be safe to re-run.
+
 ## Later
 - **Make your account the coach** (after your first sign-in), in SQL Editor:
   ```sql

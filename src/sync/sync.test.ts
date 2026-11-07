@@ -7,7 +7,8 @@ import {
   saveBodyweight, saveProgram, startup, updateExercise, updateSettings
 } from '../db/repo';
 import type { Program } from '../db/types';
-import { AccountMismatchError, resetPushCursor, syncOnce, type Remote } from './engine';
+import { athleteData } from './athleteData';
+import { AccountMismatchError, resetPushCursor, syncAthletes, syncOnce, type Remote } from './engine';
 import { fromRow, resolve, toRow, type CloudRow } from './merge';
 
 /** An in-memory stand-in for the Supabase `records` table, with the same last-write-wins trigger. */
@@ -24,8 +25,8 @@ class FakeCloud implements Remote {
       this.rows.set(key, structuredClone({ ...r, synced_at: new Date(Date.UTC(2026, 0, 1, 0, 0, ++this.tick)).toISOString() }));
     }
   }
-  async pull(since: string | null) {
-    return [...this.rows.values()].filter((r) => !since || r.synced_at! > since).sort((a, b) => (a.synced_at! < b.synced_at! ? -1 : 1)).map((r) => structuredClone(r));
+  async pull(since: string | null, athleteId: string) {
+    return [...this.rows.values()].filter((r) => r.athlete_id === athleteId && (!since || r.synced_at! > since)).sort((a, b) => (a.synced_at! < b.synced_at! ? -1 : 1)).map((r) => structuredClone(r));
   }
 }
 
@@ -164,6 +165,32 @@ describe('two devices', () => {
   it('refuses to mix another account into this phone’s data', async () => {
     await sync(phone);
     await expect(syncOnce(phone, cloud, '22222222-2222-2222-2222-222222222222')).rejects.toBeInstanceOf(AccountMismatchError);
+  });
+
+  it('gives a coach a read-only copy of a client’s training, and drops it when they leave', async () => {
+    const CLIENT = '33333333-3333-3333-3333-333333333333';
+    const client = new TrackerDB(`sync-client-${n}`);
+    await startup(client, storage(legacy));
+    await syncOnce(client, cloud, CLIENT); // the client's own sync
+    await sync(phone); // the coach's own sync
+    expect(await syncAthletes(phone, cloud, [CLIENT])).toBeGreaterThan(0);
+    const data = athleteData(await phone.athleteCache.where('athleteId').equals(CLIENT).toArray(), new Map());
+    expect(data.sessions.map((s) => s.id)).toEqual(['w2', 'w1']);
+    expect(data.sessions[0].athleteId).toBe(CLIENT); // never 'me' on the coach's phone
+    expect(await listSessions(phone)).toHaveLength(2); // the coach's own sessions are separate
+    const pushedBefore = cloud.rows.size;
+    await sync(phone);
+    expect(cloud.rows.size).toBe(pushedBefore); // client copies are never pushed as the coach's
+
+    await pause();
+    await deleteSession(client, 'w1');
+    await syncOnce(client, cloud, CLIENT);
+    await syncAthletes(phone, cloud, [CLIENT]);
+    const after = athleteData(await phone.athleteCache.where('athleteId').equals(CLIENT).toArray(), new Map());
+    expect(after.sessions.map((s) => s.id)).toEqual(['w2']);
+
+    await syncAthletes(phone, cloud, []);
+    expect(await phone.athleteCache.count()).toBe(0);
   });
 
   it('re-sends everything after a backup import, without overwriting newer cloud copies', async () => {

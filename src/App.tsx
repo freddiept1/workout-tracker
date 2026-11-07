@@ -17,8 +17,12 @@ import { LogView } from './views/LogView';
 import { ProgressView } from './views/ProgressView';
 import { SettingsDialog } from './views/SettingsDialog';
 import { startSync } from './sync/controller';
+import { ClientsView } from './views/ClientsView';
+import { JoinSheet } from './views/clients/JoinSheet';
+import { useProfile } from './hooks';
+import { takeInviteFromUrl } from './lib/invite';
 
-type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates';
+type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates' | 'clients';
 
 function safeLocalStorage(): Storage | null {
   try {
@@ -70,7 +74,7 @@ function applyTheme(theme: Settings['theme']) {
   window.dispatchEvent(new Event('themechange'));
 }
 
-const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Plan' };
+const titles: Record<View, string> = { log: 'Log', history: 'History', progress: 'Progress', exercises: 'Exercises', templates: 'Plan', clients: 'Clients' };
 
 function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   // undefined until loaded: don't render (or convert the draft's units) against default settings.
@@ -78,6 +82,8 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   const [view, setView] = useState<View>('log');
   const [draft, setDraftState] = useState<Draft | null | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [invite, setInvite] = useState<string | null>(() => takeInviteFromUrl()); // ?invite=CODE from an invite link
+  const isCoach = useProfile()?.role === 'coach';
   const [notice, setNotice] = useState<string | null>(
     migrated && migrated.sessions
       ? `Your data was upgraded: ${plural(migrated.sessions, 'workout')} and ${plural(migrated.sets, 'set')} carried over.`
@@ -173,6 +179,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           {view === 'progress' && <ProgressView settings={settings} />}
           {view === 'exercises' && <ExercisesView onMerged={loadDraft} />}
           {view === 'templates' && <PlanView unit={unit} onStart={startProgram} />}
+          {view === 'clients' && <ClientsView />}
         </section>
       </main>
 
@@ -188,15 +195,22 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
         <Tab view="templates" current={view} onClick={show} label="Plan">
           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Tab>
+        {isCoach && (
+          <Tab view="clients" current={view} onClick={show} label="Clients">
+            <circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2" />
+          </Tab>
+        )}
       </nav>
 
       <Celebration prs={celebrate} exercises={exerciseMap} unit={unit} onClose={() => setCelebrate(null)} />
+      <JoinSheet code={invite} onClose={() => setInvite(null)} />
 
       <SettingsDialog
         open={settingsOpen}
         settings={settings}
         onClose={() => setSettingsOpen(false)}
         onImported={() => { setSettingsOpen(false); loadDraft(); show('history'); }}
+        onInvite={(code) => { setSettingsOpen(false); setInvite(code); }}
       />
     </>
   );

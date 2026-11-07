@@ -2,6 +2,29 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Clients and invites (2026-11-07)
+
+Stage 3 of coach mode.
+
+### Added
+- **Clients tab** (coach accounts only):
+  - **Needs a look:** alerts across all clients, worst first. No workout for 7+ days, behind the weekly target (only once it can't be hit), low check-ins 3 days running, missed weigh-ins, stalled lifts, and new PRs as good news.
+  - A card per client: last workout, sessions this week vs target, bodyweight (7-day average and 4-week change), readiness, program and next day.
+  - Tap a client for their stats, alerts, a 3-month bodyweight chart, recent workouts with PRs, and their settings: sessions per week and weigh-in reminder. You can also stop coaching them there.
+- **Invites:** "Add a client" (name, optional email, target, reminder) creates an 8-character code (like `K7P2-QX9M`) and a ready-to-send message with the link. Pending invites can be re-shared or cancelled.
+- **Joining as a client:** the link or code shows who invited them, then sign-in with an email code, then a consent tick with the privacy notice, then **Join**. In Safari on an iPhone it first explains how to add the app to the home screen, since the installed app keeps its own data.
+- **For clients:** Settings → Account shows their coach, with a **Leave** button. The weigh-in reminder is set by the coach.
+- **Privacy notice** (`src/lib/privacy.ts`) and **Delete my account and cloud data**, for everyone.
+- **Your name** in Settings → Account (shown to clients on invites).
+
+### Security
+- A coach can read, but not change, the training of clients who accepted their invite, and only while linked.
+- Clients can't see other clients, create invites, change their coach's settings or make themselves a coach.
+- Leaving or being removed takes effect straight away, and the coach's phone deletes its copy.
+
+### Changed
+- Database version 4 adds a read-only `athleteCache` for clients' records, kept apart from your own and never synced back. It's cleared on sign-out.
+
 ## Accounts and cloud sync (2026-11-07)
 
 Stage 2 of coach mode.

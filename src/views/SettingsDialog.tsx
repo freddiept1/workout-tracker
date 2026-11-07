@@ -19,9 +19,10 @@ interface Props {
   settings: Settings;
   onClose: () => void;
   onImported: () => void;
+  onInvite: (code: string) => void;
 }
 
-export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
+export function SettingsDialog({ open, settings, onClose, onImported, onInvite }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [notify, setNotify] = useState<NotifyState>(notifyState());
@@ -66,7 +67,7 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
     <dialog ref={dialog} onClose={onClose}>
       <form method="dialog" className="stack">
         <h2>Settings</h2>
-        <AccountSection />
+        <AccountSection onInvite={onInvite} />
         <div>
           <label>Theme</label>
           <div className="segmented">

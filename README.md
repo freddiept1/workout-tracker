@@ -67,6 +67,11 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 - **Daily check-in** on the Log tab: Sleep, Energy, Soreness, Stress (1–5), one tap each. Skip it any day.
 - **Weigh-in card** shows when one is due (Weekly by default; Daily or Off in Settings). One weigh-in per day: logging again that day replaces it.
 
+### Coaching clients
+- **Coach** (your account, set once in Supabase): a **Clients** tab with alerts ("Needs a look"), a card per client, and each client's stats, recent workouts and settings (sessions per week, weigh-in reminder). **Add a client** creates an invite code and a message to send.
+- **Clients** join with the link or code: sign in with their email, agree to the privacy notice, done. They see who their coach is and can leave at any time. Their weigh-in reminder is set by the coach.
+- Anyone can delete their account and cloud data (Settings → Account → Sign out… → Delete).
+
 ### Streak
 Your streak counts training days in a row, and up to **2 rest days** in a row keep it alive (a 3rd breaks it). The Log tab shows your current and best streak and how many rest days you have left.
 

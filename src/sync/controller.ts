@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { db } from '../db/db';
 import { LEGACY_KEY } from '../db/migrateLegacy';
 import { cloudConfigured } from './config';
-import { getSyncState, isApplyingRemote, syncOnce, AccountMismatchError } from './engine';
+import { forgetSync, getSyncState, isApplyingRemote, syncAthletes, syncOnce, AccountMismatchError } from './engine';
 
 export interface SyncStatus {
   configured: boolean;
@@ -76,7 +76,9 @@ export function syncNow(): Promise<void> {
       set({ state: 'syncing', error: null });
       try {
         if (!navigator.onLine) throw new TypeError('offline');
-        await syncOnce(db, supabaseRemote, status.user!.id);
+        const uid = status.user!.id;
+        await syncOnce(db, supabaseRemote, uid);
+        await refreshCoaching(uid);
         set({ state: 'idle', lastSyncAt: (await getSyncState(db))?.lastSyncAt ?? null });
       } catch (err) {
         const offline = err instanceof TypeError || /connection|fetch|network|offline/i.test(String((err as Error).message));
@@ -86,6 +88,26 @@ export function syncNow(): Promise<void> {
     } while (again);
   })().finally(() => { running = null; });
   return running;
+}
+
+/**
+ * Profile (are you a coach?), coach/client links, and, for a coach, fresh read-only copies of
+ * each active client's training. Saved in `meta` so the app knows all this offline too.
+ */
+async function refreshCoaching(uid: string) {
+  const { fetchProfile, fetchLinks, supabaseRemote } = await import('./cloud');
+  const [profile, links] = await Promise.all([fetchProfile(uid), fetchLinks(uid)]);
+  await db.meta.bulkPut([{ key: 'profile', value: profile }, { key: 'links', value: links }]);
+  const clients = profile?.role === 'coach' ? links.filter((l) => l.coachId === uid && l.status === 'active' && l.clientId).map((l) => l.clientId!) : [];
+  await syncAthletes(db, supabaseRemote, clients);
+}
+
+/** After a coach action (invite, remove…): reload links straight away. */
+export async function refreshLinks() {
+  if (!status.user) return;
+  const { fetchLinks } = await import('./cloud');
+  await db.meta.put({ key: 'links', value: await fetchLinks(status.user.id) });
+  void syncNow();
 }
 
 /** After the emailed code is accepted. */
@@ -111,10 +133,28 @@ export async function signOutAndMaybeErase(removeData: boolean) {
   }
   const { signOut } = await import('./cloud');
   await signOut().catch(() => {});
+  await forgetCoaching();
   set({ user: null, state: 'signed-out', error: null });
   if (removeData) {
     db.close();
     await db.delete();
     location.reload();
   }
+}
+
+/** Clients' data and coach links never stay on a phone nobody is signed in to. */
+async function forgetCoaching() {
+  await db.athleteCache.clear();
+  await db.meta.bulkDelete(['profile', 'links']);
+}
+
+/** Deletes the account and all its cloud data. Training on this phone stays, unlinked from any account. */
+export async function deleteAccount() {
+  await running;
+  const { deleteMyAccount, signOut } = await import('./cloud');
+  await deleteMyAccount();
+  await signOut().catch(() => {});
+  await forgetCoaching();
+  await forgetSync(db);
+  set({ user: null, state: 'signed-out', error: null, lastSyncAt: null });
 }

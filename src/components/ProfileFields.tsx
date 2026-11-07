@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import { updateSettings } from '../db/repo';
+import { useMyCoach } from '../hooks';
 import type { Settings } from '../db/types';
 import { shortDate } from '../lib/dates';
 import { formatWeight, fromKg, parseNumber, round, toKg } from '../lib/units';
@@ -46,6 +47,11 @@ export function ProfileFields({ settings, logged }: { settings: Settings; logged
 
 /** Off / Daily / Weekly weigh-in reminder (the card on the Log tab). */
 export function ReminderSetting({ settings }: { settings: Settings }) {
+  const coach = useMyCoach();
+  if (coach) {
+    const label = { off: 'Off', daily: 'Daily', weekly: 'Weekly' }[coach.bodyweightReminder];
+    return <p className="hint set-by-coach">{label}, set by {coach.coachName ?? 'your coach'}.</p>;
+  }
   return (
     <div className="segmented">
       {([['off', 'Off'], ['daily', 'Daily'], ['weekly', 'Weekly']] as const).map(([v, label]) => (

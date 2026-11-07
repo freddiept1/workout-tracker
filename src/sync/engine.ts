@@ -2,7 +2,7 @@
 // The phone's database stays the source of truth; nothing local is ever hard-deleted by a sync.
 import type { TrackerDB } from '../db/db';
 import { applyLibrary } from '../db/seed';
-import type { MigrationInfo, Settings } from '../db/types';
+import type { CachedRecord, MigrationInfo, Settings } from '../db/types';
 import { nowIso } from '../lib/ids';
 import { fromRow, resolve, SYNC_TABLES, toRow, type CloudRow, type LocalRecord, type SyncKind, type SyncTable } from './merge';
 
@@ -10,8 +10,8 @@ import { fromRow, resolve, SYNC_TABLES, toRow, type CloudRow, type LocalRecord, 
 export interface Remote {
   /** Save rows; the server keeps whichever copy has the newer `updated_at`. */
   push(rows: CloudRow[]): Promise<void>;
-  /** Every row changed after `since` (server time), oldest first; all rows when `since` is null. */
-  pull(since: string | null): Promise<CloudRow[]>;
+  /** One athlete's rows changed after `since` (server time), oldest first; all of them when `since` is null. */
+  pull(since: string | null, athleteId: string): Promise<CloudRow[]>;
 }
 
 export interface SyncState {
@@ -21,6 +21,8 @@ export interface SyncState {
   /** The server's `synced_at` of the newest row pulled. */
   pulledAt: string | null;
   lastSyncAt: string | null;
+  /** Coach mode: per-client `synced_at` cursors for the read-only client copies. */
+  athletes?: Record<string, string | null>;
 }
 
 export class AccountMismatchError extends Error {
@@ -58,7 +60,7 @@ export async function syncOnce(db: TrackerDB, remote: Remote, uid: string, clock
 
   // 1. Pull.
   const since = state?.pulledAt ? new Date(Date.parse(state.pulledAt) - OVERLAP_MS).toISOString() : null;
-  const rows = (await remote.pull(since)).filter((r) => r.athlete_id === uid);
+  const rows = (await remote.pull(since, uid)).filter((r) => r.athlete_id === uid);
   if (first && rows.length && (await isFreshDevice(db))) await dropStarterTemplates(db);
   const { applied, changed } = await applyRows(db, rows, uid, clock);
 
@@ -68,7 +70,7 @@ export async function syncOnce(db: TrackerDB, remote: Remote, uid: string, clock
   if (out.length) await remote.push(out);
 
   const pulledAt = rows.reduce<string | null>((max, r) => (r.synced_at && (!max || r.synced_at > max) ? r.synced_at : max), state?.pulledAt ?? null);
-  await db.meta.put({ key: 'sync', value: { uid, pushedAt: started, pulledAt, lastSyncAt: clock() } satisfies SyncState });
+  await db.meta.put({ key: 'sync', value: { ...state, uid, pushedAt: started, pulledAt, lastSyncAt: clock() } satisfies SyncState });
   return { pulled: changed, pushed: out.length };
 }
 
@@ -151,4 +153,42 @@ async function localChanges(db: TrackerDB, uid: string, since: string | null, sk
     out.push(toRow('settings', { ...(settings.value as object), id: 'settings', updatedAt: settings.updatedAt, deletedAt: null }, uid));
   }
   return out;
+}
+
+/**
+ * Coach mode: refresh the read-only copies of these clients' records (and drop any client no longer
+ * in the list). Each client has their own cursor, so a newly joined client gets their full history.
+ */
+export async function syncAthletes(db: TrackerDB, remote: Remote, athleteIds: string[]): Promise<number> {
+  const state = await getSyncState(db);
+  if (!state) return 0;
+  const cursors = { ...state.athletes };
+  let changed = 0;
+  for (const id of athleteIds) {
+    const since = cursors[id] ? new Date(Date.parse(cursors[id]!) - OVERLAP_MS).toISOString() : null;
+    const rows = (await remote.pull(since, id)).filter((r) => r.athlete_id === id);
+    if (rows.length) {
+      await db.transaction('rw', db.athleteCache, async () => {
+        const keys = rows.map((r) => `${id}/${r.kind}/${r.id}`);
+        const existing = await db.athleteCache.bulkGet(keys);
+        const puts: CachedRecord[] = [];
+        rows.forEach((r, i) => {
+          const data = r.data as { updatedAt?: string };
+          const updatedAt = data.updatedAt ?? r.updated_at;
+          if (existing[i] && Date.parse(existing[i]!.updatedAt) >= Date.parse(updatedAt)) return;
+          puts.push({ key: keys[i], athleteId: id, kind: r.kind, id: r.id, updatedAt, data: r.data });
+        });
+        if (puts.length) await db.athleteCache.bulkPut(puts);
+        changed += puts.length;
+      });
+      cursors[id] = rows.reduce((max, r) => (r.synced_at && (!max || r.synced_at > max) ? r.synced_at : max), cursors[id] ?? null);
+    } else if (!(id in cursors)) cursors[id] = null;
+  }
+  for (const id of Object.keys(cursors)) {
+    if (athleteIds.includes(id)) continue;
+    await db.athleteCache.where('athleteId').equals(id).delete(); // no longer your client
+    delete cursors[id];
+  }
+  await db.meta.put({ key: 'sync', value: { ...(await getSyncState(db))!, athletes: cursors } });
+  return changed;
 }

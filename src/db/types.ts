@@ -276,8 +276,45 @@ export interface MigrationInfo {
   templates: number;
 }
 
+// ---------- Coach mode (cloud) ----------
+
+/** A client's record, copied read-only to the coach's phone (`athleteCache` table, schema v4). */
+export interface CachedRecord {
+  key: string; // `${athleteId}/${kind}/${id}`
+  athleteId: string;
+  kind: string;
+  id: string;
+  updatedAt: string;
+  data: Record<string, unknown>;
+}
+
+/** Your account's profile (meta.profile). */
+export interface CloudProfile {
+  id: string;
+  name: string | null;
+  role: 'coach' | 'athlete';
+  consentedAt: string | null;
+}
+
+/** A coach ↔ client link (cloud `coach_clients`), cached in meta.links. */
+export interface CoachLink {
+  id: string;
+  coachId: string;
+  clientId: string | null;
+  name: string;
+  invitedEmail: string | null;
+  inviteCode: string;
+  status: 'invited' | 'active' | 'removed';
+  bodyweightReminder: BodyweightReminder;
+  weeklyTarget: number | null;
+  createdAt: string;
+  joinedAt: string | null;
+  coachName?: string | null; // filled in on the client's side
+}
+
 export interface MetaRow {
-  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped' | 'sync'; // checkinSkipped: date the check-in card was dismissed
+  // checkinSkipped: date the check-in card was dismissed. profile/links: cached from the cloud.
+  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped' | 'sync' | 'profile' | 'links';
   updatedAt?: string; // settings: when they last changed (for sync)
   value: unknown;
 }

@@ -105,7 +105,8 @@ describe('database upgrade', () => {
     expect(await upgraded.sessions.get('old')).toBeTruthy();
     expect(await upgraded.programs.get('p1')).toBeTruthy();
     expect(await upgraded.metrics.count()).toBe(0);
-    expect(upgraded.verno).toBe(3);
+    expect(upgraded.verno).toBe(4);
+    expect(await upgraded.athleteCache.count()).toBe(0); // v4: coach mode's client copies
     const settings = await getSettings(upgraded);
     expect(settings.unit).toBe('lb');
     expect(settings.bodyweightReminder).toBe('weekly'); // missing in old settings, filled from defaults
