@@ -1,29 +1,32 @@
 import { useState } from 'react';
 import type { Settings } from '../db/types';
-import { useExerciseMap, usePRs, useSessions } from '../hooks';
+import { useExerciseMap, useMetrics, usePRs, useSessions } from '../hooks';
+import { BodyPanel } from './progress/BodyPanel';
 import { LiftPanel } from './progress/LiftPanel';
 import { TotalPanel } from './progress/TotalPanel';
 import { WeekPanel } from './progress/WeekPanel';
 
-type Panel = 'lift' | 'week' | 'total';
+type Panel = 'lift' | 'week' | 'total' | 'body';
 
 export function ProgressView({ settings }: { settings: Settings }) {
   const sessions = useSessions();
+  const metrics = useMetrics();
   const exercises = useExerciseMap();
   const prs = usePRs(sessions, exercises);
   const [panel, setPanel] = useState<Panel>('lift');
-  if (!sessions) return null;
+  if (!sessions || !metrics) return null;
 
   return (
     <>
       <div className="segmented panel-tabs">
-        {([['lift', 'Lifts'], ['week', 'Week'], ['total', 'Total']] as const).map(([id, label]) => (
+        {([['lift', 'Lifts'], ['week', 'Week'], ['total', 'Total'], ['body', 'Body']] as const).map(([id, label]) => (
           <button type="button" key={id} className={panel === id ? 'on' : ''} onClick={() => setPanel(id)}>{label}</button>
         ))}
       </div>
       {panel === 'lift' && <LiftPanel sessions={sessions} exercises={exercises} prs={prs} unit={settings.unit} />}
       {panel === 'week' && <WeekPanel sessions={sessions} exercises={exercises} prs={prs} unit={settings.unit} />}
-      {panel === 'total' && <TotalPanel sessions={sessions} exercises={exercises} settings={settings} />}
+      {panel === 'total' && <TotalPanel sessions={sessions} exercises={exercises} settings={settings} metrics={metrics} />}
+      {panel === 'body' && <BodyPanel metrics={metrics} settings={settings} />}
     </>
   );
 }

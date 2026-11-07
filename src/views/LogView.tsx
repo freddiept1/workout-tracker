@@ -6,8 +6,10 @@ import { finishDraft, lastPerformance, listPrograms, updateExercise } from '../d
 import type { Draft, DraftExercise, DraftSet, Exercise, Program, Settings, Template, Unit } from '../db/types';
 import { isDeloadWeek, nextSlot, type Slot } from '../lib/programs';
 import { Wordmark } from '../components/Logo';
+import { BodyweightCard } from '../components/BodyweightCard';
+import { CheckinCard } from '../components/CheckinCard';
 import { StreakCard } from '../components/StreakCard';
-import { useExerciseMap, useSessions, useTemplates } from '../hooks';
+import { useCheckinSkipped, useExerciseMap, useMetrics, useSessions, useTemplates } from '../hooks';
 import { unlockAudio } from '../lib/alerts';
 import { shortDate } from '../lib/dates';
 import { afterTick, blankSet, finishPlan, groupLetters, linkWithNext, move, newDraftExercise, unlink } from '../lib/draft';
@@ -35,6 +37,8 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const templates = useTemplates();
   const programs = useLiveQuery(() => listPrograms(db).then((all) => all.filter((p) => p.status === 'active')), []);
   const sessions = useSessions();
+  const metrics = useMetrics();
+  const checkinSkipped = useCheckinSkipped();
   const exercises = useExerciseMap();
   const unit = settings.unit;
   const plates = settings.equipment[unit];
@@ -64,6 +68,8 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
     return (
       <>
         <Wordmark />
+        {metrics && <CheckinCard metrics={metrics} skippedOn={checkinSkipped} />}
+        {metrics && <BodyweightCard metrics={metrics} settings={settings} />}
         {sessions && <StreakCard sessions={sessions} />}
         {programs?.map((p) => {
           const next = nextSlot(p);

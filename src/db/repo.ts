@@ -5,12 +5,12 @@ import { isDrill } from '../lib/tracking';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
 import { isDeloadWeek, loadRounder, nextSlot, prescribe, type HistoryEntry, type PrescribeInput, type Slot } from '../lib/programs';
 import { setE1RM } from '../lib/strength';
-import { formatWeight } from '../lib/units';
+import { formatWeight, round } from '../lib/units';
 import { addDays } from '../lib/weekly';
 import type { TrackerDB } from './db';
 import { LEGACY_KEY, isLegacyData, migrateLegacy, type MigrationResult } from './migrateLegacy';
 import { applyLibrary } from './seed';
-import type { Draft, DraftExercise, DraftV1, Exercise, MigrationInfo, Program, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
+import type { Checkin, Draft, DraftExercise, DraftV1, Exercise, Metric, MigrationInfo, Program, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
 import { DEFAULT_SETTINGS, ME } from './types';
 
 export { DEFAULT_SETTINGS };
@@ -70,13 +70,14 @@ function starterData(now: string): MigrationResult {
  * does nothing (and returns false) if a migration already ran, so two app tabs can't both migrate.
  */
 async function writeAll(db: TrackerDB, data: MigrationResult, info: MigrationInfo, opts = { onlyIfNotMigrated: false }) {
-  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.programs, db.meta], async () => {
+  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.programs, db.metrics, db.meta], async () => {
     if (opts.onlyIfNotMigrated && (await db.meta.get('migration'))) return false;
-    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear(), db.programs.clear()]);
+    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear(), db.programs.clear(), db.metrics.clear()]);
     await db.exercises.bulkPut(data.exercises);
     await db.sessions.bulkPut(data.sessions);
     await db.templates.bulkPut(data.templates);
     await db.programs.bulkPut(data.programs ?? []);
+    await db.metrics.bulkPut(data.metrics ?? []);
     await db.meta.bulkPut([
       { key: 'settings', value: data.settings },
       { key: 'draft', value: data.draft },
@@ -373,6 +374,57 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
   });
 }
 
+// ---------- Body metrics ----------
+
+/** Metrics for the current lifter, oldest first (optionally one kind). */
+export async function listMetrics(db: TrackerDB, kind?: Metric['kind']): Promise<Metric[]> {
+  const all = await db.metrics.where('athleteId').equals(ME).filter(alive).toArray();
+  return all.filter((m) => !kind || m.kind === kind).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt.localeCompare(b.updatedAt)));
+}
+
+/** The one record of a kind for a day (creating it if needed), so logging again updates it. */
+async function upsertMetric(db: TrackerDB, kind: Metric['kind'], date: string, patch: Partial<Metric>): Promise<Metric> {
+  return db.transaction('rw', db.metrics, async () => {
+    const now = nowIso();
+    const existing = (await db.metrics.where('[athleteId+kind+date]').equals([ME, kind, date]).toArray())
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    const metric: Metric = {
+      ...(existing ?? { id: newId(), athleteId: ME, date, kind, createdAt: now }),
+      ...patch,
+      updatedAt: now,
+      deletedAt: null
+    };
+    await db.metrics.put(metric);
+    return metric;
+  });
+}
+
+export async function saveBodyweight(db: TrackerDB, date: string, kg: number): Promise<Metric> {
+  if (!(kg > 20 && kg < 400)) throw new Error('That bodyweight doesn’t look right.');
+  return upsertMetric(db, 'bodyweight', date, { bodyweightKg: round(kg, 3) });
+}
+
+/** Saves some or all of a day's check-in answers (each 1–5); earlier answers that day are kept. */
+export async function saveCheckin(db: TrackerDB, date: string, answers: Partial<Checkin>): Promise<Metric> {
+  const existing = (await db.metrics.where('[athleteId+kind+date]').equals([ME, 'checkin', date]).filter(alive).first())?.checkin;
+  const checkin: Checkin = { sleep: null, energy: null, soreness: null, stress: null, ...existing, ...answers };
+  return upsertMetric(db, 'checkin', date, { checkin });
+}
+
+export async function deleteMetric(db: TrackerDB, id: string) {
+  const now = nowIso();
+  await db.metrics.update(id, { deletedAt: now, updatedAt: now });
+}
+
+/** "Skip today" on the check-in card. */
+export async function skipCheckin(db: TrackerDB, date: string) {
+  await db.meta.put({ key: 'checkinSkipped', value: date });
+}
+
+export async function checkinSkippedOn(db: TrackerDB): Promise<string | null> {
+  return ((await db.meta.get('checkinSkipped'))?.value as string | undefined) ?? null;
+}
+
 // ---------- Programs ----------
 
 export async function listPrograms(db: TrackerDB): Promise<Program[]> {
@@ -549,8 +601,8 @@ export async function deleteTemplate(db: TrackerDB, id: string) {
 
 // ---------- Backup ----------
 
-/** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft); 5 = Phase 4 (programs). Older formats still import. */
-export const EXPORT_FORMAT = 5;
+/** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft); 5 = Phase 4 (programs); 6 = body metrics. Older formats still import. */
+export const EXPORT_FORMAT = 6;
 
 export interface ExportFile {
   app: 'workout-tracker';
@@ -561,6 +613,7 @@ export interface ExportFile {
   sessions: Session[];
   templates: Template[];
   programs?: Program[]; // format 5+
+  metrics?: Metric[]; // format 6+
   draft: Draft | DraftV1 | null;
 }
 
@@ -575,6 +628,7 @@ export async function exportAll(db: TrackerDB): Promise<ExportFile> {
     sessions: await db.sessions.toArray(),
     templates: await db.templates.toArray(),
     programs: await db.programs.toArray(),
+    metrics: await db.metrics.toArray(),
     draft: await getDraft(db)
   };
 }
@@ -594,6 +648,7 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
       sessions: f.sessions,
       templates: f.templates ?? [],
       programs: f.programs ?? [],
+      metrics: f.metrics ?? [],
       draft: (f.draft ?? null) as Draft | null, // a Phase 0 draft is upgraded by getDraft()
       sourceVersion: f.format,
       setCount: f.sessions.reduce((n, s) => n + s.exercises.reduce((m, e) => m + e.sets.length, 0), 0)

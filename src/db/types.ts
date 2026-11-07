@@ -115,6 +115,26 @@ export interface PlateSetup {
   plates: number[]; // available plate sizes (unlimited pairs)
 }
 
+// ---------- Body metrics ----------
+
+/** 1–5 each. Sleep/energy: higher is better. Soreness/stress: higher is worse. */
+export interface Checkin {
+  sleep: number | null;
+  energy: number | null;
+  soreness: number | null;
+  stress: number | null;
+}
+
+/** One record per kind per day (logging again the same day updates it). */
+export interface Metric extends Owned {
+  date: string; // YYYY-MM-DD
+  kind: 'bodyweight' | 'checkin';
+  bodyweightKg?: number | null;
+  checkin?: Checkin | null;
+}
+
+export type BodyweightReminder = 'off' | 'daily' | 'weekly';
+
 // ---------- Programs (Phase 4) ----------
 
 /**
@@ -173,9 +193,12 @@ export interface Settings {
   sex: 'male' | 'female' | null;
   bodyweightKg: number | null;
   theme: 'dark' | 'light' | 'system';
+  bodyweightReminder: BodyweightReminder; // when the Log tab asks for a weigh-in
 }
 
-export const DEFAULT_SETTINGS: Settings = { unit: 'kg', restSound: true, equipment: DEFAULT_EQUIPMENT, sex: null, bodyweightKg: null, theme: 'dark' };
+export const DEFAULT_SETTINGS: Settings = {
+  unit: 'kg', restSound: true, equipment: DEFAULT_EQUIPMENT, sex: null, bodyweightKg: null, theme: 'dark', bodyweightReminder: 'weekly'
+};
 
 /**
  * The workout being logged, kept exactly as typed so nothing is lost if the app closes.
@@ -254,6 +277,6 @@ export interface MigrationInfo {
 }
 
 export interface MetaRow {
-  key: 'settings' | 'draft' | 'migration' | 'library';
+  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped'; // checkinSkipped: date the check-in card was dismissed
   value: unknown;
 }

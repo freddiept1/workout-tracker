@@ -59,15 +59,20 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
   - Best 1RM–12RM table and PR history.
   - Athletic work charts volume (sprint metres, jumps, throws, heaviest carry).
 - **Week:** sessions, sets and tonnage vs last week, PRs, hard sets per muscle group vs a typical range, tonnage by week, and a consistency calendar.
-- **Total:** best squat + bench + deadlift (lifted and e1RM), with DOTS and Wilks. Set your category and bodyweight in Settings.
+- **Total:** best squat + bench + deadlift (lifted and e1RM), with DOTS and Wilks. Set your category in Settings. Bodyweight comes from your weigh-ins (7-day average), or the profile number until you log one.
+- **Body:** bodyweight chart (weigh-ins plus 7-day average), the 4-week change, recent weigh-ins, check-in averages and readiness by week.
 - **PRs** (heaviest weight, rep PRs, e1RM, session volume) get a celebration when you finish a workout, and 🏆 badges in History.
+
+### Check-in and bodyweight
+- **Daily check-in** on the Log tab: Sleep, Energy, Soreness, Stress (1–5), one tap each. Skip it any day.
+- **Weigh-in card** shows when one is due (Weekly by default; Daily or Off in Settings). One weigh-in per day: logging again that day replaces it.
 
 ### Streak
 Your streak counts training days in a row, and up to **2 rest days** in a row keep it alive (a 3rd breaks it). The Log tab shows your current and best streak and how many rest days you have left.
 
 ### Other screens
 - **History**: every workout, newest first, with tonnage and PR badges. Tap one for details or to delete it.
-- **Settings** (gear icon): theme (Dark / Light / Match phone), kg or lb (weights are converted), lifter profile, rest timer beep and notifications, bar/collar/plates, backup Export/Import.
+- **Settings** (gear icon): theme (Dark / Light / Match phone), kg or lb (weights are converted), lifter profile, weigh-in reminder, rest timer beep and notifications, bar/collar/plates, backup Export/Import.
 
 ## Your data
 Everything is stored on your phone only, in the browser's database (IndexedDB). Nothing is sent anywhere.

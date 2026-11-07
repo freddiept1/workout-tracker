@@ -16,6 +16,7 @@ Types live in `src/db/types.ts`, tables and indexes in `src/db/db.ts`.
 | ↳ set | id, type (warmup/working/top/backoff/amrap/drop/failure), weightKg, reps, rpe, **distanceM**, **effortPct**, **side** (L/R), tempo, notes, completedAt | Lifts use weight/reps/RPE. Athletic work uses distance/reps/load plus `effortPct` (% of max), never measured results. `completedAt` is set when ticked off live (or at finish for filled-in unticked sets). History migrated from the old app has `null` here, which is how XP will tell live work from back-filled history |
 | `templates` | id, athleteId, name, order, exercises[{exerciseId}] | |
 | `meta` | key → value | `settings` ({unit, restSound, equipment {kg, lb: {bar, collar, plates[]}}}), `draft` (the in-progress workout exactly as typed, v2: per-set done/completedAt, rest timer endsAt), `migration` (when/what was migrated) |
+| `metrics` (schema v3) | id, athleteId, date, kind (bodyweight/checkin), bodyweightKg, checkin {sleep, energy, soreness, stress} (each 1–5 or null) | One record per kind per day (index `[athleteId+kind+date]`); logging again updates it, and check-in answers merge. `meta.checkinSkipped` holds the date "Skip today" was tapped. `settings.bodyweightReminder` (off/daily/weekly). The 7-day average, trends and readiness are computed in `src/lib/body.ts` |
 | `programs` (schema v2) | id, athleteId, name, weeks, deloadEvery, days[{id, name, exercises: PlannedExercise[]}], maxes{exerciseId: kg}, status (active/completed/archived), startedAt, log{"w1d1": {sessionId, date, skipped}} | Planned exercise: exerciseId, sets, reps ("5" or "8-12"), method (linear/double/rpe/pct/fixed), startKg, pcts[] (per week), rpe, incrementKg, effort, distanceM, notes. Program workouts set `session.programDayId = "programId:w1d1"` |
 
 ### Derived, not stored (Phase 3)
@@ -26,9 +27,8 @@ e1RM, PRs, rep maxes, weekly hard sets per muscle group, tonnage and the total/D
 
 | Phase | Table | Key fields |
 | --- | --- | --- |
-| 5 | `bodyMetrics` | id, athleteId, date, type (bodyweight/waist/chest/...), value |
+| 5 | `metrics` kinds | Built for bodyweight and check-ins (above). Waist/chest etc. would be new `kind`s |
 | 5 | `photos` | id, athleteId, date, pose, blob (stored as a Blob in IndexedDB, never uploaded unless sync is on) |
-| 5 | `checkins` | id, athleteId, date, sessionId, sleep, soreness, stress, motivation, readiness |
 | 5 | `painLog` | id, athleteId, date, area, severity, exerciseId, notes |
 | 6 | `xpEvents` | id, athleteId, at, kind (set/rpe-bonus/session/pr/weekly-target/block), xp, sessionId, setId, muscles[{muscle, xp}]. A ledger: XP is written when work is logged live, back-filled once from history, and never written by edits |
 | 6 | `achievements` | id, athleteId, badgeId, earnedAt, data |

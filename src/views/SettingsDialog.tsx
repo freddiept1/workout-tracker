@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ProfileFields } from '../components/ProfileFields';
+import { ProfileFields, ReminderSetting } from '../components/ProfileFields';
+import { useMetrics } from '../hooks';
+import { bodyweightFor, weighIns } from '../lib/body';
 import { db } from '../db/db';
 import { exportAll, importAll, setUnit, updateSettings } from '../db/repo';
 import type { PlateSetup, Settings } from '../db/types';
@@ -22,6 +24,8 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
   const [notify, setNotify] = useState<NotifyState>(notifyState());
   const unit = settings.unit;
   const setup = settings.equipment[unit];
+  const metrics = useMetrics();
+  const body = metrics ? bodyweightFor(weighIns(metrics), settings.bodyweightKg) : null;
 
   useEffect(() => {
     const d = dialog.current!;
@@ -78,8 +82,17 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
 
         <div>
           <label>Lifter profile</label>
-          <ProfileFields settings={settings} />
-          <p className="hint">Used for DOTS, Wilks and strength relative to bodyweight on the Progress tab.</p>
+          <ProfileFields settings={settings} logged={body?.logged ? { kg: body.kg, asOf: body.asOf! } : null} />
+          <p className="hint">
+            Used for DOTS, Wilks and strength relative to bodyweight on the Progress tab.
+            {body?.logged ? ' Bodyweight comes from your weigh-ins (Progress → Body).' : ' Once you log weigh-ins, their 7-day average is used instead.'}
+          </p>
+        </div>
+
+        <div>
+          <label>Weigh-in reminder</label>
+          <ReminderSetting settings={settings} />
+          <p className="hint">Shows a quick bodyweight card on the Log tab when a weigh-in is due.</p>
         </div>
 
         <div>

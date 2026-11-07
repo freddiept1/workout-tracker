@@ -3,14 +3,19 @@ import { useEffect, useRef, useState } from 'react';
 
 interface Props {
   labels: string[];
-  values: number[];
+  values: (number | null)[];
   unit: string;
   kind?: 'line' | 'bar';
   height?: number;
+  /** Optional raw readings drawn as faint dots behind the line (e.g. daily weigh-ins under the 7-day average). */
+  points?: (number | null)[];
+  /** Y axis bounds (e.g. 1–5 for check-ins). */
+  min?: number;
+  max?: number;
 }
 
 /** Line or bar chart that takes its colours from the CSS variables, and redraws when light/dark mode changes. */
-export function ProgressChart({ labels, values, unit, kind = 'line', height }: Props) {
+export function ProgressChart({ labels, values, unit, kind = 'line', height, points, min, max }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [scheme, setScheme] = useState(0);
 
@@ -40,8 +45,18 @@ export function ProgressChart({ labels, values, unit, kind = 'line', height }: P
           pointRadius: 4,
           pointHoverRadius: 6,
           borderRadius: 4,
-          maxBarThickness: 22
-        }]
+          maxBarThickness: 22,
+          spanGaps: true,
+          ...(points ? { pointRadius: 0, pointHoverRadius: 4, fill: false } : {})
+        }, ...(points ? [{
+          type: 'line' as const,
+          data: points,
+          showLine: false,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: color('--muted'),
+          borderColor: color('--muted')
+        }] : [])]
       },
       options: {
         maintainAspectRatio: false,
@@ -52,12 +67,12 @@ export function ProgressChart({ labels, values, unit, kind = 'line', height }: P
         },
         scales: {
           x: { ticks: { color: color('--muted'), maxRotation: 0, autoSkip: true }, grid: { display: false } },
-          y: { ticks: { color: color('--muted') }, grid: { color: color('--border') }, border: { display: false } }
+          y: { min, max, ticks: { color: color('--muted') }, grid: { color: color('--border') }, border: { display: false } }
         }
       }
     });
     return () => chart.destroy();
-  }, [labels, values, unit, scheme, kind]);
+  }, [labels, values, unit, scheme, kind, points, min, max]);
 
   return <div className="chart-wrap" style={height ? { height } : undefined}><canvas ref={canvas} /></div>;
 }

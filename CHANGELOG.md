@@ -2,6 +2,27 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Body metrics (2026-11-07)
+
+Stage 1 of coach mode. It works on your own phone straight away and needs no cloud.
+
+### Added
+- **Daily check-in** on the Log tab: Sleep, Energy, Soreness and Stress, each 1–5.
+  - One tap per row and every tap saves, so it takes about 5 seconds. It can be skipped for the day.
+  - Once all four are answered it shrinks to one line with a **readiness** score (the average, with soreness and stress flipped so 5 is always good). Tap it to change an answer.
+- **Weigh-in card** on the Log tab when a weigh-in is due. Type one number and it goes away until the next one.
+  - Reminder: **Weekly** (default), **Daily** or **Off**, in Settings or Progress → Body.
+- **Progress → Body:**
+  - Bodyweight chart: single weigh-ins as dots, with the **7-day average** as the line. 1 month / 3 months / 1 year.
+  - Current 7-day average, the change over 4 weeks, a quick "Log" box and the last 5 weigh-ins (each can be deleted).
+  - Check-in averages for this week vs the previous 4 weeks, and a readiness-by-week chart.
+  - A note when the last 3 check-ins in a row were rough (sleep or energy 2 or below, or soreness or stress 4 or above).
+
+### Changed
+- **DOTS, Wilks and "× BW"** now use the 7-day average of your weigh-ins. The bodyweight number in your profile is only used until you log one.
+- Backups include weigh-ins and check-ins (backup format 6). Older backups still import.
+- Database version 3 adds a `metrics` table. Existing data is untouched.
+
 ## Warm-ups (2026-11-01)
 
 ### Added

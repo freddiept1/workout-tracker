@@ -2,13 +2,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { db } from './db/db';
-import { DEFAULT_SETTINGS, getSettings, listExercises, listSessions, listTemplates } from './db/repo';
-import type { Exercise, Session } from './db/types';
+import { checkinSkippedOn, DEFAULT_SETTINGS, getSettings, listExercises, listMetrics, listSessions, listTemplates } from './db/repo';
+import type { Exercise, Metric, Session } from './db/types';
 import { findPRs, type PR } from './lib/prs';
 
 export const useSettings = () => useLiveQuery(() => getSettings(db), []) ?? DEFAULT_SETTINGS;
 export const useSessions = () => useLiveQuery(() => listSessions(db), []);
 export const useTemplates = () => useLiveQuery(() => listTemplates(db), []);
+export const useMetrics = (): Metric[] | undefined => useLiveQuery(() => listMetrics(db), []);
+export const useCheckinSkipped = () => useLiveQuery(() => checkinSkippedOn(db), []);
 
 /** All exercises by id. Includes deleted ones so old sessions still show their names. */
 export function useExerciseMap(): Map<string, Exercise> {

@@ -148,6 +148,6 @@ describe('database upgrade', () => {
     const upgraded = new TrackerDB(name);
     expect(await upgraded.sessions.get('old')).toBeTruthy();
     expect(await upgraded.programs.count()).toBe(0);
-    expect(upgraded.verno).toBe(2);
+    expect(upgraded.verno).toBeGreaterThanOrEqual(2);
   });
 });

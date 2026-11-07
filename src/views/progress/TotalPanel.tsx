@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { ProfileFields } from '../../components/ProfileFields';
-import type { Exercise, Session, Settings } from '../../db/types';
+import type { Exercise, Metric, Session, Settings } from '../../db/types';
+import { bodyweightFor, weighIns } from '../../lib/body';
 import { shortDate } from '../../lib/dates';
 import { bestLifts, dots, wilks, type TotalLift } from '../../lib/powerlifting';
 import { formatWeight, fromKg, round } from '../../lib/units';
@@ -9,12 +10,13 @@ interface Props {
   sessions: Session[];
   exercises: Map<string, Exercise>;
   settings: Settings;
+  metrics: Metric[];
 }
 
 const LIFTS = [['squat', 'Squat'], ['bench', 'Bench'], ['deadlift', 'Deadlift']] as const;
 
 /** Powerlifting total from your best squat, bench and deadlift, with DOTS and Wilks. */
-export function TotalPanel({ sessions, exercises, settings }: Props) {
+export function TotalPanel({ sessions, exercises, settings, metrics }: Props) {
   const unit = settings.unit;
   const best = useMemo(() => bestLifts(sessions, exercises), [sessions, exercises]);
   const w = (kg: number) => `${formatWeight(kg, unit)} ${unit}`;
@@ -24,7 +26,8 @@ export function TotalPanel({ sessions, exercises, settings }: Props) {
     lifted: LIFTS.every(([k]) => best[k].lifted) ? LIFTS.reduce((n, [k]) => n + best[k].lifted!.weightKg, 0) : null,
     estimated: LIFTS.every(([k]) => best[k].estimated) ? LIFTS.reduce((n, [k]) => n + best[k].estimated!.e1rm, 0) : null
   };
-  const bw = settings.bodyweightKg;
+  const body = useMemo(() => bodyweightFor(weighIns(metrics), settings.bodyweightKg), [metrics, settings.bodyweightKg]);
+  const bw = body?.kg ?? null;
   const sex = settings.sex;
   const scores = (total: number | null) => (total && bw && sex ? { dots: dots(total, bw, sex), wilks: wilks(total, bw, sex) } : null);
 
@@ -74,9 +77,9 @@ export function TotalPanel({ sessions, exercises, settings }: Props) {
             })}
           </div>
         ) : (
-          <p className="hint">Add your category and bodyweight to see DOTS and Wilks.</p>
+          <p className="hint">Add your category and bodyweight (or log a weigh-in) to see DOTS and Wilks.</p>
         )}
-        <ProfileFields settings={settings} />
+        <ProfileFields settings={settings} logged={body?.logged ? { kg: body.kg, asOf: body.asOf! } : null} />
       </div>
     </>
   );
