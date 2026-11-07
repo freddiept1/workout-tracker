@@ -7,7 +7,7 @@ import { findPRs } from './prs';
 import { round } from './units';
 import { addDays, weekStart } from './weekly';
 
-export type AlertKind = 'inactive' | 'behind' | 'stalled' | 'rough' | 'weighin' | 'pr';
+export type AlertKind = 'comment' | 'inactive' | 'behind' | 'stalled' | 'rough' | 'weighin' | 'pr';
 
 export interface RosterAlert {
   kind: AlertKind;
@@ -40,6 +40,8 @@ export interface ClientInput {
   target: number | null;
   /** When they joined (ISO); alerts about not doing things wait until they've had time to. */
   joinedAt: string | null;
+  /** Their comments on sessions you haven't read yet. */
+  unreadComments?: number;
   today: string;
 }
 
@@ -51,6 +53,8 @@ export function summariseClient(c: ClientInput): ClientSummary {
   const joinedDay = c.joinedAt?.slice(0, 10) ?? today;
   const memberDays = daysBetween(joinedDay, today);
   const alerts: RosterAlert[] = [];
+
+  if (c.unreadComments) alerts.push({ kind: 'comment', text: `${plural(c.unreadComments, 'new comment')} on their workouts` });
 
   // Sessions.
   const dates = [...new Set(c.sessions.map((s) => s.date))].sort();
@@ -126,4 +130,4 @@ export function missedWeighIn(reminder: BodyweightReminder, last: string | null,
 }
 
 /** Worst first: things to act on before good news. */
-export const ALERT_ORDER: AlertKind[] = ['inactive', 'behind', 'rough', 'weighin', 'stalled', 'pr'];
+export const ALERT_ORDER: AlertKind[] = ['comment', 'inactive', 'behind', 'rough', 'weighin', 'stalled', 'pr'];

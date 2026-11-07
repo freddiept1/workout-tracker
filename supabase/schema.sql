@@ -76,6 +76,15 @@ begin
         new.deleted_at := old.deleted_at;
       end if;
     end if;
+    -- A comment can only be edited or deleted by whoever wrote it.
+    if new.kind = 'comments' and old.owner_id is distinct from auth.uid() then
+      return null;
+    end if;
+  end if;
+  -- A comment's author is always the account that wrote it (no writing in someone else's name).
+  if new.kind = 'comments' then
+    new.data := jsonb_set(new.data, '{authorId}', to_jsonb(new.owner_id::text));
+    new.data := jsonb_set(new.data, '{authorName}', coalesce(to_jsonb((select p.name from public.profiles p where p.id = new.owner_id)), 'null'::jsonb));
   end if;
   new.synced_at := clock_timestamp();
   return new;
@@ -250,7 +259,7 @@ drop policy if exists "add own records" on public.records;
 create policy "add own records" on public.records for insert with check (
   owner_id = auth.uid() and (
     athlete_id = auth.uid()
-    or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises'))
+    or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises', 'comments'))
   )
 );
 
@@ -262,5 +271,14 @@ alter table public.records add constraint records_owner_id_fkey foreign key (own
 -- Update: the same. (A coach can't change a client's weigh-ins, check-ins, templates or settings.)
 drop policy if exists "change own records" on public.records;
 create policy "change own records" on public.records for update
-  using (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises')))
-  with check (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises')));
+  using (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises', 'comments')))
+  with check (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises', 'comments')));
+
+-- =====================================================================================
+-- Stage 5: comments on sessions
+-- =====================================================================================
+
+-- Comments are stored like any other record (kind 'comments'), under the session's athlete.
+alter table public.records drop constraint if exists records_kind_check;
+alter table public.records add constraint records_kind_check
+  check (kind in ('exercises', 'sessions', 'templates', 'programs', 'metrics', 'settings', 'comments'));

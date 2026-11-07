@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TrackerDB } from '../db/db';
 import { LEGACY_KEY } from '../db/migrateLegacy';
 import {
-  assignProgram, deleteSession, exportAll, finishDraft, getSettings, importAll, listExercises, listMetrics, listPrograms, listSessions, listTemplates,
+  addComment, assignProgram, commentsSeen, deleteSession, exportAll, finishDraft, getSettings, importAll, listComments, listExercises, listMetrics, listPrograms, listSessions, listTemplates,
   saveBodyweight, saveProgram, skipProgramSlot, startup, updateExercise, updateSettings
 } from '../db/repo';
 import type { Draft, Program } from '../db/types';
 import { blankSet } from '../lib/draft';
+import { unreadBySession } from '../lib/comments';
 import { loadAthletes } from './athleteData';
 import { AccountMismatchError, resetPushCursor, syncAthletes, syncOnce, type Remote } from './engine';
 import { fromRow, resolve, toRow, type CloudRow } from './merge';
@@ -34,7 +35,7 @@ class FakeCloud implements Remote {
     return {
       push: async (rows) => {
         for (const r of rows) {
-          const ok = r.athlete_id === uid || (clients().includes(r.athlete_id) && ['sessions', 'programs', 'exercises'].includes(r.kind));
+          const ok = r.athlete_id === uid || (clients().includes(r.athlete_id) && ['sessions', 'programs', 'exercises', 'comments'].includes(r.kind));
           if (!ok) throw new Error('new row violates row-level security policy for table "records"');
         }
         await this.push(rows);
@@ -245,6 +246,24 @@ describe('two devices', () => {
       await clientSync();
       await coachSync();
       expect(Object.keys((await listPrograms(phone, CLIENT))[0].log)).toEqual(['w1d1']);
+    });
+
+    it('comments on a client’s session go both ways', async () => {
+      const session = (await listSessions(phone, CLIENT))[0];
+      await addComment(phone, session, 'Great bar speed on the last set', { id: UID, name: 'Freddie' });
+      await coachSync();
+      await clientSync();
+      const theirs = await listComments(client);
+      expect(theirs).toMatchObject([{ sessionId: session.id, athleteId: 'me', authorId: UID, body: 'Great bar speed on the last set' }]);
+      expect(unreadBySession(theirs, await commentsSeen(client), CLIENT).get(session.id)).toBe(1);
+
+      await addComment(client, { id: session.id, athleteId: 'me' }, 'Felt easy, go up next week?', { id: CLIENT, name: 'Jess' });
+      await clientSync();
+      await coachSync();
+      const onCoach = await listComments(phone, CLIENT);
+      expect(onCoach.map((c) => c.body)).toEqual(['Great bar speed on the last set', 'Felt easy, go up next week?']);
+      expect(unreadBySession(onCoach, await commentsSeen(phone), UID).get(session.id)).toBe(1); // the reply is new to the coach
+      expect(await listComments(phone)).toEqual([]); // not mixed into the coach's own
     });
 
     it('keeps syncing when a client leaves while the coach’s phone still has their records to send', async () => {

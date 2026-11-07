@@ -2,6 +2,7 @@
 import { shortDate } from '../lib/dates';
 import { blankSet, commonTempo, finishPlan, newDrill, toSetEntry, upgradeDraftV1 } from '../lib/draft';
 import { isDrill } from '../lib/tracking';
+import { isValidComment } from '../lib/comments';
 import { exerciseIdFor, newId, nowIso } from '../lib/ids';
 import { isDeloadWeek, loadRounder, nextSlot, prescribe, type HistoryEntry, type PrescribeInput, type Slot } from '../lib/programs';
 import { setE1RM } from '../lib/strength';
@@ -10,7 +11,7 @@ import { addDays } from '../lib/weekly';
 import type { TrackerDB } from './db';
 import { LEGACY_KEY, isLegacyData, migrateLegacy, type MigrationResult } from './migrateLegacy';
 import { applyLibrary } from './seed';
-import type { Checkin, Draft, DraftExercise, DraftV1, Exercise, Metric, MigrationInfo, Program, Session, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
+import type { Checkin, Draft, DraftExercise, DraftV1, Exercise, Metric, MigrationInfo, Program, Session, SessionComment, SessionExercise, SetEntry, Settings, Template, TrackingMode } from './types';
 import { DEFAULT_SETTINGS, ME } from './types';
 
 export { DEFAULT_SETTINGS };
@@ -70,14 +71,15 @@ function starterData(now: string): MigrationResult {
  * does nothing (and returns false) if a migration already ran, so two app tabs can't both migrate.
  */
 async function writeAll(db: TrackerDB, data: MigrationResult, info: MigrationInfo, opts = { onlyIfNotMigrated: false }) {
-  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.programs, db.metrics, db.meta], async () => {
+  return db.transaction('rw', [db.exercises, db.sessions, db.templates, db.programs, db.metrics, db.comments, db.meta], async () => {
     if (opts.onlyIfNotMigrated && (await db.meta.get('migration'))) return false;
-    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear(), db.programs.clear(), db.metrics.clear()]);
+    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.templates.clear(), db.programs.clear(), db.metrics.clear(), db.comments.clear()]);
     await db.exercises.bulkPut(data.exercises);
     await db.sessions.bulkPut(data.sessions);
     await db.templates.bulkPut(data.templates);
     await db.programs.bulkPut(data.programs ?? []);
     await db.metrics.bulkPut(data.metrics ?? []);
+    await db.comments.bulkPut(data.comments ?? []);
     await db.meta.bulkPut([
       { key: 'settings', value: data.settings },
       { key: 'draft', value: data.draft },
@@ -443,6 +445,46 @@ export async function checkinSkippedOn(db: TrackerDB): Promise<string | null> {
   return ((await db.meta.get('checkinSkipped'))?.value as string | undefined) ?? null;
 }
 
+// ---------- Comments on sessions (coach mode) ----------
+
+/** Comments on the current athlete's sessions, oldest first. */
+export async function listComments(db: TrackerDB, athleteId = current): Promise<SessionComment[]> {
+  return (await db.comments.where('athleteId').equals(athleteId).filter((c) => alive(c) && isValidComment(c)).toArray()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Adds a comment to a session. It belongs to the session's athlete, so their coach and they both see it. */
+export async function addComment(db: TrackerDB, session: Pick<Session, 'id' | 'athleteId'>, body: string, author: { id: string; name: string | null }): Promise<SessionComment> {
+  const text = body.trim();
+  if (!text) throw new Error('Write something first.');
+  if (text.length > 2000) throw new Error('That comment is too long (2,000 characters at most).');
+  const now = nowIso();
+  const comment: SessionComment = {
+    id: newId(), athleteId: session.athleteId, sessionId: session.id, authorId: author.id, authorName: author.name, body: text,
+    createdAt: now, updatedAt: now, deletedAt: null
+  };
+  await db.comments.put(comment);
+  await markCommentsSeen(db, session.id, now); // your own comment isn't "new" to you
+  return comment;
+}
+
+export async function deleteComment(db: TrackerDB, id: string) {
+  const now = nowIso();
+  await db.comments.update(id, { deletedAt: now, updatedAt: now });
+}
+
+/** When you last looked at each session's comments (this phone only). */
+export async function commentsSeen(db: TrackerDB): Promise<Record<string, string>> {
+  return ((await db.meta.get('commentsSeen'))?.value as Record<string, string> | undefined) ?? {};
+}
+
+export async function markCommentsSeen(db: TrackerDB, sessionId: string, at = nowIso()) {
+  await db.transaction('rw', db.meta, async () => {
+    const seen = await commentsSeen(db);
+    if ((seen[sessionId] ?? '') >= at) return;
+    await db.meta.put({ key: 'commentsSeen', value: { ...seen, [sessionId]: at } });
+  });
+}
+
 // ---------- Programs ----------
 
 export async function listPrograms(db: TrackerDB, athleteId = current): Promise<Program[]> {
@@ -676,7 +718,7 @@ export async function deleteTemplate(db: TrackerDB, id: string) {
 // ---------- Backup ----------
 
 /** 3 = Phase 0; 4 = Phase 1 (athletic set fields, v2 draft); 5 = Phase 4 (programs); 6 = body metrics. Older formats still import. */
-export const EXPORT_FORMAT = 6;
+export const EXPORT_FORMAT = 7;
 
 export interface ExportFile {
   app: 'workout-tracker';
@@ -688,6 +730,7 @@ export interface ExportFile {
   templates: Template[];
   programs?: Program[]; // format 5+
   metrics?: Metric[]; // format 6+
+  comments?: SessionComment[]; // format 7+
   draft: Draft | DraftV1 | null;
 }
 
@@ -704,6 +747,7 @@ export async function exportAll(db: TrackerDB): Promise<ExportFile> {
     templates: await db.templates.where('athleteId').equals(ME).toArray(),
     programs: await db.programs.where('athleteId').equals(ME).toArray(),
     metrics: await db.metrics.where('athleteId').equals(ME).toArray(),
+    comments: await db.comments.where('athleteId').equals(ME).toArray(),
     draft: await getDraft(db)
   };
 }
@@ -724,6 +768,7 @@ export async function importAll(db: TrackerDB, text: string): Promise<{ sessions
       templates: f.templates ?? [],
       programs: f.programs ?? [],
       metrics: f.metrics ?? [],
+      comments: f.comments ?? [],
       draft: (f.draft ?? null) as Draft | null, // a Phase 0 draft is upgraded by getDraft()
       sourceVersion: f.format,
       setCount: f.sessions.reduce((n, s) => n + s.exercises.reduce((m, e) => m + e.sets.length, 0), 0)

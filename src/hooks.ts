@@ -2,8 +2,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { createContext, useContext, useMemo } from 'react';
 import { db } from './db/db';
-import { checkinSkippedOn, DEFAULT_SETTINGS, getSettings, listExercises, listMetrics, listSessions, listTemplates } from './db/repo';
-import type { CloudProfile, CoachLink, Exercise, Metric, Session } from './db/types';
+import { checkinSkippedOn, commentsSeen, DEFAULT_SETTINGS, getSettings, listComments, listExercises, listMetrics, listSessions, listTemplates } from './db/repo';
+import { unreadByAthlete, unreadBySession } from './lib/comments';
+import type { CloudProfile, CoachLink, Exercise, Metric, Session, SessionComment } from './db/types';
 import { findPRs, type PR } from './lib/prs';
 import { ME } from './db/types';
 import { currentAthlete } from './db/repo';
@@ -77,4 +78,27 @@ export function useClientList(): { id: string; name: string }[] {
     .filter((l) => l.coachId === profile.id && l.status === 'active' && l.clientId)
     .map((l) => ({ id: l.clientId!, name: l.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------- Comments ----------
+
+/** Your account id (null when signed out or before the first sync). */
+export const useMyId = (): string | null => useProfile()?.id ?? null;
+
+/** Comments on the current athlete's sessions, grouped by session, plus which are new to you. */
+export function useSessionComments() {
+  const myId = useMyId();
+  const data = useLiveQuery(async () => ({ list: await listComments(db), seen: await commentsSeen(db) }), []);
+  return useMemo(() => {
+    const bySession = new Map<string, SessionComment[]>();
+    for (const c of data?.list ?? []) bySession.set(c.sessionId, [...(bySession.get(c.sessionId) ?? []), c]);
+    return { bySession, unread: unreadBySession(data?.list ?? [], data?.seen ?? {}, myId), myId };
+  }, [data, myId]);
+}
+
+/** Unread comment counts for the tab badges: yours (History) and per client (Clients). */
+export function useUnreadComments(): Map<string, number> {
+  const myId = useMyId();
+  const data = useLiveQuery(async () => ({ list: await db.comments.toArray(), seen: await commentsSeen(db) }), []);
+  return useMemo(() => unreadByAthlete(data?.list ?? [], data?.seen ?? {}, myId), [data, myId]);
 }

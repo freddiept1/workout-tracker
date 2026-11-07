@@ -3,7 +3,7 @@ import type { Program } from '../db/types';
 import { ME } from '../db/types';
 
 /** The local tables that sync, plus settings (stored in `meta`). Kinds are stored in the cloud. */
-export const SYNC_TABLES = ['exercises', 'sessions', 'templates', 'programs', 'metrics'] as const;
+export const SYNC_TABLES = ['exercises', 'sessions', 'templates', 'programs', 'metrics', 'comments'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 export type SyncKind = SyncTable | 'settings';
 
@@ -37,8 +37,11 @@ export function toRow(kind: SyncKind, record: LocalRecord, uid: string): CloudRo
 }
 
 export function fromRow(row: CloudRow, uid: string): LocalRecord {
-  const data = { ...row.data } as LocalRecord;
-  if (data.athleteId !== undefined && data.athleteId === uid) data.athleteId = ME;
+  const data = { ...row.data, id: row.id } as LocalRecord;
+  // Whose record it is comes from the row's key (which the security rules check), never from the
+  // JSON inside, so a malformed or tampered record can't land under the wrong person.
+  if (row.kind !== 'exercises' && row.kind !== 'settings') data.athleteId = row.athlete_id === uid ? ME : row.athlete_id;
+  if (!data.updatedAt) data.updatedAt = row.updated_at;
   return data;
 }
 

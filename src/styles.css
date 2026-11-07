@@ -870,3 +870,33 @@ button.link.inline { min-height: 0; padding: 0; font-size: inherit; display: inl
 .from-coach { display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
 .first-heading { margin-top: 4px; }
 .confirm-card { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+
+/* Comments on sessions */
+.comments { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.comments-head { font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; }
+.comment { max-width: 88%; margin: 6px 0; padding: 8px 10px; border-radius: 12px 12px 12px 4px; background: var(--surface-2); }
+.comment.mine { margin-left: auto; border-radius: 12px 12px 4px 12px; background: var(--accent-soft); }
+.comment-meta { font-size: 0.72rem; color: var(--muted); }
+.comment-meta .link { margin-left: 8px; font-size: 0.72rem; }
+.danger-link { color: var(--danger) !important; }
+.comment-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.92rem; }
+.comment-new { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.comment-new textarea { flex: 1; min-height: 44px; resize: vertical; }
+.comment-badge { margin-left: 8px; font-size: 0.78rem; color: var(--muted); }
+.comment-badge.unread { padding: 1px 7px; border-radius: 999px; background: var(--accent-strong); color: var(--accent-text); font-weight: 700; }
+.tab { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 8px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 18px;
+}
+.alert-dot.comment { background: var(--accent); }

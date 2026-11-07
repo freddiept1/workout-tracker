@@ -2,6 +2,26 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Comments on sessions (2026-11-07)
+
+Stage 5 of coach mode, and the last. Messaging stays on WhatsApp.
+
+### Added
+- **💬 Comments under each workout in History,** between coach and client. They show on a client's sessions when you're viewing them, and on your own sessions if you have a coach. Your comments are on the right in green, and you can delete only your own (tap twice).
+- **Unread badges:**
+  - A count on the History tab and "💬 2 new" on the workout.
+  - For coaches, a count on the Clients tab and "N new comments on their workouts" in Needs a look.
+  - Opening the workout marks them read.
+- Comments sync like everything else, so you can write them offline. Backups include comments on your own sessions (backup format 7).
+- Database version 5 adds a `comments` table.
+
+### Security
+- Nobody can edit or delete someone else's comment. The author's account and name are always set by the server, so no one can comment in someone else's name.
+
+### Fixed
+- New comments were only sent on the 5-minute timer, not a few seconds after posting. Every synced table now triggers a sync.
+- A record from the cloud is always filed under the account it belongs to (from the server's key, not its contents), and malformed comments are ignored instead of blanking the screen.
+
 ## Programs for clients and logging in person (2026-11-07)
 
 Stage 4 of coach mode.

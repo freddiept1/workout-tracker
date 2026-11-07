@@ -71,6 +71,7 @@ Sprints, jumps, hops, bounds, throws, carries and sleds are logged by **what you
 - **Coach** (your account, set once in Supabase): a **Clients** tab with alerts ("Needs a look"), a card per client, and each client's stats, recent workouts and settings (sessions per week, weigh-in reminder). **Add a client** creates an invite code and a message to send.
 - **Clients** join with the link or code: sign in with their email, agree to the privacy notice, done. They see who their coach is and can leave at any time. Their weigh-in reminder is set by the coach.
 - **Me ▾** (top bar, coaches): switch History, Progress, Plan and Log to a client. Workouts you log while a client is picked go into their account. In Plan you can assign them one of your programs or write one for them. They follow it ("From Freddie"), and you see their progress.
+- **Comments:** open a workout in History to comment on it. Coach and client see the same thread, with a badge for new ones (History tab, and Clients tab for coaches).
 - Anyone can delete their account and cloud data (Settings → Account → Sign out… → Delete).
 
 ### Streak

@@ -284,6 +284,14 @@ export interface MigrationInfo {
   templates: number;
 }
 
+/** A comment on a session (coach mode). Belongs to the session's athlete, so both coach and client see it. */
+export interface SessionComment extends Owned {
+  sessionId: string;
+  authorId: string; // the writer's account id
+  authorName: string | null;
+  body: string;
+}
+
 // ---------- Coach mode (cloud) ----------
 
 /** A client's record, copied read-only to the coach's phone (`athleteCache` table, schema v4). */
@@ -324,7 +332,7 @@ export interface CoachLink {
 
 export interface MetaRow {
   // checkinSkipped: date the check-in card was dismissed. profile/links: cached from the cloud.
-  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped' | 'sync' | 'profile' | 'links';
+  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped' | 'sync' | 'profile' | 'links' | 'commentsSeen';
   updatedAt?: string; // settings: when they last changed (for sync)
   value: unknown;
 }

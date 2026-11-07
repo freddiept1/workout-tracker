@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { db } from '../db/db';
 import { LEGACY_KEY } from '../db/migrateLegacy';
 import { cloudConfigured } from './config';
+import { SYNC_TABLES } from './merge';
 import { forgetSync, getSyncState, isApplyingRemote, removeAllAthletes, syncAthletes, syncOnce, AccountMismatchError } from './engine';
 
 export interface SyncStatus {
@@ -43,7 +44,8 @@ export async function startSync() {
 
   // Any local change schedules a sync a few seconds later (changes made by sync itself don't).
   const changed = () => { if (!isApplyingRemote()) schedule(AFTER_CHANGE_MS); };
-  for (const t of [db.exercises, db.sessions, db.templates, db.programs, db.metrics, db.athleteCache] as typeof db.sessions[]) {
+  // Every synced table (SYNC_TABLES) plus the client-copy store: a table missing here would only sync on the next timer.
+  for (const t of [...SYNC_TABLES.map((name) => db.table(name)), db.athleteCache] as typeof db.sessions[]) {
     t.hook('creating', changed);
     t.hook('updating', changed);
   }

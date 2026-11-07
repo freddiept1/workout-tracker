@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { CoachLink, Exercise } from '../db/types';
-import { useExerciseMap, useLinks, useProfile, useSettings } from '../hooks';
+import { useExerciseMap, useLinks, useProfile, useSettings, useUnreadComments } from '../hooks';
 import { shortDate } from '../lib/dates';
 import { today } from '../lib/ids';
 import { formatCode } from '../lib/invite';
@@ -28,6 +28,7 @@ export function ClientsView({ onOpenAthlete }: { onOpenAthlete: (id: string, nam
   const baseExercises = useExerciseMap();
   const settings = useSettings();
   const sync = useSyncStatus();
+  const unread = useUnreadComments();
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [sharing, setSharing] = useState<CoachLink | null>(null);
@@ -45,14 +46,15 @@ export function ClientsView({ onOpenAthlete }: { onOpenAthlete: (id: string, nam
         const data = loaded.get(link.clientId!)!;
         const summary = summariseClient({
           sessions: data.sessions, metrics: data.metrics, programs: data.programs, exercises: data.exercises,
-          reminder: link.bodyweightReminder, target: link.weeklyTarget, joinedAt: link.joinedAt, today: date
+          reminder: link.bodyweightReminder, target: link.weeklyTarget, joinedAt: link.joinedAt, today: date,
+          unreadComments: unread.get(link.clientId!) ?? 0
         });
         const stamps = [...data.sessions, ...data.metrics, ...data.programs].map((r) => r.updatedAt);
         const lastSeen = stamps.reduce<string | null>((max, s) => (!max || s > max ? s : max), null);
         return { link, data, summary, lastSeen };
       })
       .sort((a, b) => a.link.name.localeCompare(b.link.name));
-  }, [loaded, links, profile?.id, date]);
+  }, [loaded, links, profile?.id, date, unread]);
   const invites = mine.filter((l) => l.status === 'invited');
 
   if (!sync.user) return <p className="hint">Sign in (Settings → Account) to manage clients.</p>;

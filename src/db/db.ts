@@ -1,7 +1,7 @@
 // IndexedDB database (via Dexie). Bump the version and add a new `.stores()` block whenever tables
 // or indexes change; Dexie keeps existing data. Data-shape changes also need an `.upgrade()` step.
 import Dexie, { type EntityTable } from 'dexie';
-import type { CachedRecord, Exercise, MetaRow, Metric, Program, Session, Template } from './types';
+import type { CachedRecord, Exercise, MetaRow, Metric, Program, Session, SessionComment, Template } from './types';
 
 export class TrackerDB extends Dexie {
   exercises!: EntityTable<Exercise, 'id'>;
@@ -10,6 +10,7 @@ export class TrackerDB extends Dexie {
   programs!: EntityTable<Program, 'id'>;
   metrics!: EntityTable<Metric, 'id'>;
   athleteCache!: EntityTable<CachedRecord, 'key'>;
+  comments!: EntityTable<SessionComment, 'id'>;
   meta!: EntityTable<MetaRow, 'key'>;
 
   constructor(name = 'workout-tracker') {
@@ -31,6 +32,10 @@ export class TrackerDB extends Dexie {
     // Coach mode: a read-only copy of clients' records, kept apart from your own (never pushed).
     this.version(4).stores({
       athleteCache: 'key, athleteId'
+    });
+    // Comments on sessions (coach and client). New table only.
+    this.version(5).stores({
+      comments: 'id, sessionId, athleteId, updatedAt'
     });
   }
 }

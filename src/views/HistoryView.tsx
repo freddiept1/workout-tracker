@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { deleteSession, saveTemplate } from '../db/repo';
+import { deleteSession, markCommentsSeen, saveTemplate } from '../db/repo';
+import { CommentThread } from '../components/CommentThread';
 import type { Session, Unit } from '../db/types';
+import { ME } from '../db/types';
 import { StreakChip } from '../components/StreakCard';
-import { useExerciseMap, usePRs, useSessions, useTemplates } from '../hooks';
+import { useAthlete, useExerciseMap, useMyCoach, usePRs, useSessionComments, useSessions, useTemplates } from '../hooks';
 import { longDate } from '../lib/dates';
 import { commonTempo } from '../lib/draft';
 import { describePR } from '../lib/prs';
@@ -17,6 +19,12 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
   const programs = useLiveQuery(() => db.programs.toArray(), []);
   const exercises = useExerciseMap();
   const prs = usePRs(sessions, exercises);
+  const comments = useSessionComments();
+  const athlete = useAthlete();
+  const coach = useMyCoach();
+  // Comments are for coach and client: shown when you're looking at a client, or you have a coach.
+  const commentsOn = !!comments.myId && (athlete.id !== ME || !!coach);
+  const otherName = athlete.id !== ME ? athlete.name : coach?.coachName ?? null;
   if (!sessions) return null;
 
   async function saveAsTemplate(s: Session) {
@@ -45,12 +53,15 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
         const tonnage = s.exercises.reduce(
           (n, ex) => n + ex.sets.filter((x) => isLiftSet(x, exercises.get(ex.exerciseId))).reduce((m, x) => m + tonnageOf(x), 0), 0
         );
+        const thread = comments.bySession.get(s.id) ?? [];
+        const unread = comments.unread.get(s.id) ?? 0;
         return (
-          <details className="card" key={s.id}>
+          <details className="card" key={s.id} onToggle={(e) => { if (e.currentTarget.open && unread) void markCommentsSeen(db, s.id); }}>
             <summary>
               <span>
                 <span className="card-title">{longDate(s.date)}</span>
                 {sessionPRs.length > 0 && <span className="pr-badge">🏆 {sessionPRs.length}</span>}
+                {thread.length > 0 && <span className={'comment-badge' + (unread ? ' unread' : '')}>💬 {unread ? `${unread} new` : thread.length}</span>}
                 <br />
                 <span className="card-sub">
                   {program ? `📋 ${program.name} ${s.programDayId!.split(':')[1]?.replace(/w(\d+)d(\d+)/, 'W$1 D$2')} · ` : ''}
@@ -102,6 +113,7 @@ export function HistoryView({ unit, onRepeat }: { unit: Unit; onRepeat: (s: Sess
                 );
               })}
               {s.notes && <p className="muted">{s.notes}</p>}
+              {(commentsOn || thread.length > 0) && <CommentThread session={s} comments={thread} otherName={otherName} />}
               <div className="row wrap history-actions">
                 <button type="button" className="small" onClick={() => onRepeat(s)}>Repeat</button>
                 <button type="button" className="ghost small" onClick={() => saveAsTemplate(s)}>Save as template</button>

@@ -20,7 +20,7 @@ import { SettingsDialog } from './views/SettingsDialog';
 import { startSync } from './sync/controller';
 import { ClientsView } from './views/ClientsView';
 import { JoinSheet } from './views/clients/JoinSheet';
-import { AthleteContext, useClientList, useProfile, type AthleteView } from './hooks';
+import { AthleteContext, useClientList, useProfile, useUnreadComments, type AthleteView } from './hooks';
 import { AthleteSwitcher } from './components/AthleteSwitcher';
 import { clientSettings } from './sync/athleteData';
 import { takeInviteFromUrl } from './lib/invite';
@@ -92,6 +92,9 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   // Coach mode: whose training History/Progress/Plan/Log show. Always starts on you.
   const [athlete, setAthleteState] = useState<AthleteView>({ id: ME, name: null });
   const clients = useClientList();
+  // New comments: on the History tab for whoever is on screen, on Clients for all your clients.
+  const unread = useUnreadComments();
+  const clientsUnread = clients.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
   const switchAthlete = (id: string, name: string | null) => {
     setCurrentAthlete(id);
     setAthleteState({ id, name });
@@ -221,7 +224,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
 
       <nav className="tabs">
         <Tab view="log" current={view} onClick={show} label="Log"><path d="M12 5v14M5 12h14" /></Tab>
-        <Tab view="history" current={view} onClick={show} label="History">
+        <Tab view="history" current={view} onClick={show} label="History" badge={unread.get(athlete.id)}>
           <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" />
         </Tab>
         <Tab view="progress" current={view} onClick={show} label="Progress"><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></Tab>
@@ -232,7 +235,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Tab>
         {isCoach && (
-          <Tab view="clients" current={view} onClick={show} label="Clients">
+          <Tab view="clients" current={view} onClick={show} label="Clients" badge={clientsUnread}>
             <circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2" />
           </Tab>
         )}
@@ -252,10 +255,11 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   );
 }
 
-function Tab(props: { view: View; current: View; label: string; onClick: (v: View) => void; children: ReactNode }) {
+function Tab(props: { view: View; current: View; label: string; onClick: (v: View) => void; children: ReactNode; badge?: number }) {
   return (
     <button type="button" className={'tab' + (props.view === props.current ? ' active' : '')} onClick={() => props.onClick(props.view)}>
       <svg viewBox="0 0 24 24">{props.children}</svg>
+      {!!props.badge && <span className="tab-badge" aria-label={`${props.badge} new`}>{props.badge > 9 ? '9+' : props.badge}</span>}
       <span>{props.label}</span>
     </button>
   );

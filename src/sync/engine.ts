@@ -171,9 +171,9 @@ async function localChanges(db: TrackerDB, uid: string, since: string | null, sk
 }
 
 /** The kinds of a client's records their coach may write (the cloud rules say the same). */
-export const COACH_WRITES = new Set<string>(['sessions', 'programs', 'exercises']);
+export const COACH_WRITES = new Set<string>(['sessions', 'programs', 'exercises', 'comments']);
 /** A client's records kept in the normal tables (athleteId = their account id), so every screen works for them. */
-const CLIENT_TABLES = new Set<string>(['sessions', 'programs', 'metrics', 'templates']);
+const CLIENT_TABLES = new Set<string>(['sessions', 'programs', 'metrics', 'templates', 'comments']);
 
 /**
  * Coach mode: send what the coach wrote for these clients, then fetch what changed in their
@@ -233,8 +233,8 @@ export async function removeAthlete(db: TrackerDB, athleteId: string) {
   if (athleteId === ME) return;
   applyingRemote = true;
   try {
-    await db.transaction('rw', [db.sessions, db.programs, db.metrics, db.templates, db.athleteCache], async () => {
-      for (const t of [db.sessions, db.programs, db.metrics, db.templates]) await (t as typeof db.sessions).where('athleteId').equals(athleteId).delete();
+    await db.transaction('rw', [db.sessions, db.programs, db.metrics, db.templates, db.comments, db.athleteCache], async () => {
+      for (const t of [db.sessions, db.programs, db.metrics, db.templates, db.comments]) await (t as unknown as typeof db.sessions).where('athleteId').equals(athleteId).delete();
       await db.athleteCache.where('athleteId').equals(athleteId).delete();
     });
   } finally {
@@ -245,7 +245,7 @@ export async function removeAthlete(db: TrackerDB, athleteId: string) {
 /** All clients' copies (on sign-out). */
 export async function removeAllAthletes(db: TrackerDB) {
   const ids = new Set<string>();
-  for (const t of [db.sessions, db.programs, db.metrics, db.templates]) {
+  for (const t of [db.sessions, db.programs, db.metrics, db.templates, db.comments] as unknown as (typeof db.sessions)[]) {
     for (const id of (await (t as typeof db.sessions).orderBy('athleteId').uniqueKeys()) as string[]) if (id !== ME) ids.add(id);
   }
   for (const r of await db.athleteCache.toArray()) ids.add(r.athleteId);
