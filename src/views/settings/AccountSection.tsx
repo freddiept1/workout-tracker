@@ -75,6 +75,9 @@ export function AccountSection({ onInvite }: { onInvite: (code: string) => void 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
+  const [confirming, setConfirming] = useState<'erase' | 'delete' | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [deleteText, setDeleteText] = useState('');
   const [inviteText, setInviteText] = useState('');
   const [askInvite, setAskInvite] = useState(false);
   const [notice, setNotice] = useState(false);
@@ -162,23 +165,57 @@ export function AccountSection({ onInvite }: { onInvite: (code: string) => void 
             <div className="card-sub">Your coach</div>
             <div className="card-title">{coach.coachName ?? 'Your coach'}</div>
           </div>
-          <button type="button" className="ghost small" disabled={busy} onClick={() => {
-            if (!confirm(`Stop training with ${coach.coachName ?? 'your coach'}? They’ll no longer see your training. Your data stays yours.`)) return;
-            void run(async () => {
+          {!leaving && <button type="button" className="ghost small" disabled={busy} onClick={() => setLeaving(true)}>Leave</button>}
+        </div>
+      ) : null}
+      {coach && leaving && (
+        <div className="card confirm-card">
+          <p className="account-intro"><b>Stop training with {coach.coachName ?? 'your coach'}?</b></p>
+          <p className="hint">They’ll no longer see your training. Your data stays yours, and programs they wrote stay on your phone.</p>
+          <div className="stack-sm">
+            <button type="button" className="danger full" disabled={busy} onClick={() => run(async () => {
               const { endCoaching } = await import('../../sync/cloud');
               await endCoaching(coach.id);
               await refreshLinks();
-            });
-          }}>Leave</button>
+              setLeaving(false);
+            })}>Yes, leave</button>
+            <button type="button" className="link" onClick={() => setLeaving(false)}>Cancel</button>
+          </div>
         </div>
-      ) : (
-        !isCoach && inviteEntry
       )}
+      {!coach && !isCoach && inviteEntry}
 
       {!signingOut ? (
         <div className="row account-links">
           <button type="button" className="link" onClick={() => setSigningOut(true)}>Sign out…</button>
           <button type="button" className="link" onClick={() => setNotice(!notice)}>Privacy notice</button>
+        </div>
+      ) : confirming === 'erase' ? (
+        // Confirmations are in the page, not pop-ups: some browsers block pop-ups silently.
+        <div className="card confirm-card">
+          <p className="account-intro"><b>Remove all training data from this phone?</b></p>
+          <p className="hint">It syncs first, so your cloud copy keeps everything. Signing in again brings it all back. If it can’t sync (no signal), nothing is removed.</p>
+          <div className="stack-sm">
+            <button type="button" className="danger full" disabled={busy} onClick={() => run(() => signOutAndMaybeErase(true))}>
+              {busy ? 'Syncing, then removing…' : 'Yes, sign out and remove'}
+            </button>
+            <button type="button" className="link" disabled={busy} onClick={() => setConfirming(null)}>Cancel</button>
+          </div>
+        </div>
+      ) : confirming === 'delete' ? (
+        <div className="card confirm-card">
+          <p className="account-intro"><b>Delete your account?</b></p>
+          <p className="hint">
+            Everything stored in the cloud is deleted for good{coach ? ', and your coach can no longer see your training' : ''}{isCoach ? ', and your clients are unlinked from you' : ''}. This phone keeps its own copy.
+          </p>
+          <label htmlFor="delete-confirm" className="sub">Type DELETE to confirm</label>
+          <input id="delete-confirm" autoCapitalize="characters" autoComplete="off" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} />
+          <div className="stack-sm">
+            <button type="button" className="danger full" disabled={busy || deleteText.trim().toUpperCase() !== 'DELETE'} onClick={() => run(deleteAccount)}>
+              Delete my account for good
+            </button>
+            <button type="button" className="link" disabled={busy} onClick={() => { setConfirming(null); setDeleteText(''); }}>Cancel</button>
+          </div>
         </div>
       ) : (
         <div className="card">
@@ -187,18 +224,10 @@ export function AccountSection({ onInvite }: { onInvite: (code: string) => void 
             <button type="button" className="ghost full" disabled={busy} onClick={() => run(() => signOutAndMaybeErase(false))}>
               Sign out, keep my data on this phone
             </button>
-            <button type="button" className="danger full" disabled={busy} onClick={() => run(async () => {
-              if (confirm('Remove all training data from this phone? It syncs first, so your cloud copy keeps everything, and signing in again brings it back.')) {
-                await signOutAndMaybeErase(true);
-              }
-            })}>
+            <button type="button" className="danger full" disabled={busy} onClick={() => setConfirming('erase')}>
               Sign out and remove data from this phone
             </button>
-            <button type="button" className="danger full" disabled={busy} onClick={() => run(async () => {
-              if (!confirm('Delete your account? Everything stored in the cloud is deleted for good, and your coach (if you have one) can no longer see your training. This phone keeps its own copy.')) return;
-              if (prompt('Type DELETE to confirm.') !== 'DELETE') return;
-              await deleteAccount();
-            })}>
+            <button type="button" className="danger full" disabled={busy} onClick={() => setConfirming('delete')}>
               Delete my account and cloud data
             </button>
             <button type="button" className="link" onClick={() => setSigningOut(false)}>Cancel</button>

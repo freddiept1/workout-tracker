@@ -3,8 +3,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { db } from './db/db';
 import { Celebration } from './components/Celebration';
 import { Monogram } from './components/Logo';
-import { buildProgramDraft, getDraft, getSettings, listSessions, saveDraft, startup, type StartupResult } from './db/repo';
+import { buildProgramDraft, getDraft, getSettings, listSessions, saveDraft, setCoachIdentity, setCurrentAthlete, startup, type StartupResult } from './db/repo';
 import type { Draft, Exercise, MigrationInfo, Program, Session, Settings } from './db/types';
+import { ME } from './db/types';
 import { convertDraftUnit, exercisesFromSession } from './lib/draft';
 import { nowIso, today } from './lib/ids';
 import type { Slot } from './lib/programs';
@@ -19,7 +20,9 @@ import { SettingsDialog } from './views/SettingsDialog';
 import { startSync } from './sync/controller';
 import { ClientsView } from './views/ClientsView';
 import { JoinSheet } from './views/clients/JoinSheet';
-import { useProfile } from './hooks';
+import { AthleteContext, useClientList, useProfile, type AthleteView } from './hooks';
+import { AthleteSwitcher } from './components/AthleteSwitcher';
+import { clientSettings } from './sync/athleteData';
 import { takeInviteFromUrl } from './lib/invite';
 
 type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates' | 'clients';
@@ -83,7 +86,28 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   const [draft, setDraftState] = useState<Draft | null | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [invite, setInvite] = useState<string | null>(() => takeInviteFromUrl()); // ?invite=CODE from an invite link
-  const isCoach = useProfile()?.role === 'coach';
+  const profile = useProfile();
+  const isCoach = profile?.role === 'coach';
+  useEffect(() => setCoachIdentity(profile?.role === 'coach' ? { id: profile.id, name: profile.name } : null), [profile?.id, profile?.name, profile?.role]);
+  // Coach mode: whose training History/Progress/Plan/Log show. Always starts on you.
+  const [athlete, setAthleteState] = useState<AthleteView>({ id: ME, name: null });
+  const clients = useClientList();
+  const switchAthlete = (id: string, name: string | null) => {
+    setCurrentAthlete(id);
+    setAthleteState({ id, name });
+    window.scrollTo(0, 0);
+  };
+  const linksLoaded = useLiveQuery(() => db.meta.get('links').then((r) => !!r), []);
+  useEffect(() => {
+    // The client left (or you stopped coaching them): back to your own training.
+    if (athlete.id !== ME && linksLoaded !== undefined && !clients.some((c) => c.id === athlete.id)) switchAthlete(ME, null);
+  }, [clients, athlete.id, linksLoaded]);
+  // A client's own profile (category, bodyweight) for DOTS/Wilks on their Progress screen.
+  const athleteSettings = useLiveQuery(
+    async () => (athlete.id === ME ? null : clientSettings(await db.athleteCache.where('athleteId').equals(athlete.id).toArray())),
+    [athlete.id]
+  );
+  const forAthlete = (): Pick<Draft, 'athleteId' | 'athleteName'> => (athlete.id === ME ? {} : { athleteId: athlete.id, athleteName: athlete.name ?? undefined });
   const [notice, setNotice] = useState<string | null>(
     migrated && migrated.sessions
       ? `Your data was upgraded: ${plural(migrated.sessions, 'workout')} and ${plural(migrated.sets, 'set')} carried over.`
@@ -123,7 +147,8 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   async function afterSave(sessionId: string) {
     show('history');
     const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]));
-    const prs = findPRs(await listSessions(db), exercises).get(sessionId);
+    const whose = (await db.sessions.get(sessionId))?.athleteId ?? ME; // a client's PRs when logging for them
+    const prs = findPRs(await listSessions(db, whose), exercises).get(sessionId);
     if (prs?.length) {
       setExerciseMap(exercises);
       setCelebrate(prs);
@@ -138,14 +163,17 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   }
 
   async function startProgram(program: Program, slot: Slot) {
-    beginWorkout(await buildProgramDraft(db, program, slot, settings!, today()));
+    const next = await buildProgramDraft(db, program, slot, settings!, today());
+    const name = clients.find((c) => c.id === program.athleteId)?.name;
+    beginWorkout(name ? { ...next, athleteName: name } : next);
   }
 
   async function repeatSession(session: Session) {
     const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]));
     beginWorkout({
       v: 2, unit: unit!, date: today(), startedAt: nowIso(), templateId: session.templateId, notes: '', rest: null,
-      exercises: exercisesFromSession(session, exercises, unit!)
+      exercises: exercisesFromSession(session, exercises, unit!),
+      ...forAthlete()
     });
   }
 
@@ -153,11 +181,12 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   const title = view === 'log' && draft ? 'Workout' : titles[view];
 
   return (
-    <>
+    <AthleteContext.Provider value={athlete}>
       <header className="topbar">
         <h1><Monogram size={26} />{title}</h1>
         {/* Screens can put their own buttons here (Log puts "Finish" during a workout). */}
         <div id="header-slot" className="header-slot" />
+        {isCoach && <AthleteSwitcher onSwitch={switchAthlete} />}
         <button type="button" className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
@@ -173,13 +202,20 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
             <button type="button" className="ghost small" onClick={() => setNotice(null)}>OK</button>
           </div>
         )}
-        <section className="view active" key={view}>
+        {athlete.id !== ME && (
+          <div className="athlete-banner" role="status">
+            <span>Viewing <b>{athlete.name}</b>’s training</span>
+            <button type="button" className="ghost small" onClick={() => switchAthlete(ME, null)}>Back to me</button>
+          </div>
+        )}
+        {/* Keyed by athlete too: switching remounts the screen so its data is re-read. */}
+        <section className="view active" key={`${view}:${athlete.id}`}>
           {view === 'log' && <LogView draft={draft} settings={settings} onChange={setDraft} onSaved={afterSave} onStartProgram={startProgram} />}
           {view === 'history' && <HistoryView unit={unit} onRepeat={repeatSession} />}
-          {view === 'progress' && <ProgressView settings={settings} />}
+          {view === 'progress' && <ProgressView settings={athlete.id === ME ? settings : { ...settings, sex: athleteSettings?.sex ?? null, bodyweightKg: athleteSettings?.bodyweightKg ?? null }} />}
           {view === 'exercises' && <ExercisesView onMerged={loadDraft} />}
           {view === 'templates' && <PlanView unit={unit} onStart={startProgram} />}
-          {view === 'clients' && <ClientsView />}
+          {view === 'clients' && <ClientsView onOpenAthlete={(id, name) => { switchAthlete(id, name); show('history'); }} />}
         </section>
       </main>
 
@@ -212,7 +248,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
         onImported={() => { setSettingsOpen(false); loadDraft(); show('history'); }}
         onInvite={(code) => { setSettingsOpen(false); setInvite(code); }}
       />
-    </>
+    </AthleteContext.Provider>
   );
 }
 

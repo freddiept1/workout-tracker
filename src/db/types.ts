@@ -183,6 +183,11 @@ export interface Program extends Owned {
   status: 'active' | 'completed' | 'archived';
   startedAt: string | null;
   log: { [slotKey: string]: ProgramSlotLog }; // "w1d1" -> what happened
+  /** Set on "Restart": logs from different restarts aren't merged (sync merges logs otherwise). */
+  restartedAt?: string | null;
+  /** Coach mode: the coach's account id when a coach wrote this program for a client. */
+  assignedBy?: string | null;
+  coachName?: string | null;
 }
 
 export interface Settings {
@@ -214,6 +219,9 @@ export interface Draft {
   exercises: DraftExercise[];
   rest: RestTimer | null;
   program?: DraftProgramRef | null; // set when the workout comes from a program (Phase 4)
+  /** Coach mode: whose workout this is (a client's account id), when it isn't your own. */
+  athleteId?: string;
+  athleteName?: string;
 }
 
 export interface DraftProgramRef {
@@ -286,6 +294,8 @@ export interface CachedRecord {
   id: string;
   updatedAt: string;
   data: Record<string, unknown>;
+  /** Written on this phone (a coach copying an exercise to a client) and not sent yet. */
+  dirty?: boolean;
 }
 
 /** Your account's profile (meta.profile). */

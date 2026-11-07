@@ -114,9 +114,26 @@ export async function getDraft(db: TrackerDB): Promise<Draft | null> {
   return draft;
 }
 
+// ---------- Whose training is on screen ----------
+// Coach mode: a coach's phone also holds copies of their clients' sessions, programs and metrics
+// (athleteId = the client's account id). Reads use the athlete picked in the top-bar switcher;
+// 'me' is always your own. Screens remount when it changes, so live queries re-run.
+
+let current: string = ME;
+export const currentAthlete = () => current;
+export function setCurrentAthlete(id: string) {
+  current = id;
+}
+
+/** The signed-in coach (from their profile), stamped on programs they write for clients. */
+let coachIdentity: { id: string; name: string | null } | null = null;
+export function setCoachIdentity(who: { id: string; name: string | null } | null) {
+  coachIdentity = who;
+}
+
 /** Sessions for the current lifter, newest first. */
-export async function listSessions(db: TrackerDB): Promise<Session[]> {
-  const all = await db.sessions.where('athleteId').equals(ME).filter(alive).toArray();
+export async function listSessions(db: TrackerDB, athleteId = current): Promise<Session[]> {
+  const all = await db.sessions.where('athleteId').equals(athleteId).filter(alive).toArray();
   return all.sort(newestFirst);
 }
 
@@ -139,9 +156,9 @@ export interface LastPerformance {
 }
 
 /** Sets from the most recent session that included this exercise. */
-export async function lastPerformance(db: TrackerDB, exerciseId: string): Promise<LastPerformance | null> {
+export async function lastPerformance(db: TrackerDB, exerciseId: string, athleteId = current): Promise<LastPerformance | null> {
   const sessions = await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray();
-  const latest = sessions.filter((s) => s.athleteId === ME).sort(newestFirst)[0];
+  const latest = sessions.filter((s) => s.athleteId === athleteId).sort(newestFirst)[0];
   if (!latest) return null;
   const sets = latest.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets);
   return sets.length ? { date: latest.date, sets } : null;
@@ -278,13 +295,14 @@ export async function mergeExercise(db: TrackerDB, fromId: string, intoId: strin
     const now = nowIso();
     const swap = (id: string) => (id === fromId ? intoId : id);
 
-    const sessions = await db.sessions.where('exerciseIds').equals(fromId).toArray();
+    // Only your own history: clients' sessions belong to their accounts.
+    const sessions = (await db.sessions.where('exerciseIds').equals(fromId).toArray()).filter((s) => s.athleteId === ME);
     await db.sessions.bulkPut(sessions.map((s) => {
       const exercises = s.exercises.map((e) => ({ ...e, exerciseId: swap(e.exerciseId) }));
       return { ...s, exercises, exerciseIds: [...new Set(exercises.map((e) => e.exerciseId))], updatedAt: now };
     }));
 
-    const templates = (await db.templates.toArray()).filter((t) => t.exercises.some((e) => e.exerciseId === fromId));
+    const templates = (await db.templates.toArray()).filter((t) => t.athleteId === ME && t.exercises.some((e) => e.exerciseId === fromId));
     await db.templates.bulkPut(templates.map((t) => ({ ...t, exercises: t.exercises.map((e) => ({ exerciseId: swap(e.exerciseId) })), updatedAt: now })));
 
     const children = await db.exercises.where('parentId').equals(fromId).toArray();
@@ -346,7 +364,7 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
     if (!kept.length) return null;
     const session: Session = {
       id: newId(),
-      athleteId: ME,
+      athleteId: draft.athleteId ?? ME, // a coach logging a client's session in person
       date: draft.date,
       startedAt: draft.startedAt,
       endedAt: now,
@@ -377,8 +395,8 @@ export async function finishDraft(db: TrackerDB, draft: Draft, includeUnticked =
 // ---------- Body metrics ----------
 
 /** Metrics for the current lifter, oldest first (optionally one kind). */
-export async function listMetrics(db: TrackerDB, kind?: Metric['kind']): Promise<Metric[]> {
-  const all = await db.metrics.where('athleteId').equals(ME).filter(alive).toArray();
+export async function listMetrics(db: TrackerDB, kind?: Metric['kind'], athleteId = current): Promise<Metric[]> {
+  const all = await db.metrics.where('athleteId').equals(athleteId).filter(alive).toArray();
   return all.filter((m) => !kind || m.kind === kind).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt.localeCompare(b.updatedAt)));
 }
 
@@ -427,11 +445,17 @@ export async function checkinSkippedOn(db: TrackerDB): Promise<string | null> {
 
 // ---------- Programs ----------
 
-export async function listPrograms(db: TrackerDB): Promise<Program[]> {
-  return (await db.programs.where('athleteId').equals(ME).filter(alive).toArray()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+export async function listPrograms(db: TrackerDB, athleteId = current): Promise<Program[]> {
+  return (await db.programs.where('athleteId').equals(athleteId).filter(alive).toArray()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export type ProgramInput = Pick<Program, 'name' | 'weeks' | 'deloadEvery' | 'days' | 'maxes'> & { id?: string };
+export type ProgramInput = Pick<Program, 'name' | 'weeks' | 'deloadEvery' | 'days' | 'maxes'> & {
+  id?: string;
+  /** New programs: whose program it is (defaults to whoever is on screen). */
+  athleteId?: string;
+  assignedBy?: string | null;
+  coachName?: string | null;
+};
 
 /** Creates or edits a program. Editing keeps its progress (log); a new one starts active. */
 export async function saveProgram(db: TrackerDB, input: ProgramInput): Promise<Program> {
@@ -439,11 +463,15 @@ export async function saveProgram(db: TrackerDB, input: ProgramInput): Promise<P
   if (!input.days.length) throw new Error('Add at least one day.');
   const now = nowIso();
   const existing = input.id ? await db.programs.get(input.id) : undefined;
+  const athleteId = existing?.athleteId ?? input.athleteId ?? current;
+  const forClient = athleteId !== ME; // a coach writing a client's program
   const program: Program = {
     status: 'active', startedAt: null, log: {}, createdAt: now,
     ...existing,
     id: existing?.id ?? newId(),
-    athleteId: ME,
+    athleteId,
+    assignedBy: existing?.assignedBy ?? input.assignedBy ?? (forClient ? coachIdentity?.id ?? null : null),
+    coachName: input.coachName ?? (forClient ? coachIdentity?.name : null) ?? existing?.coachName ?? null,
     name: input.name.trim(),
     weeks: Math.max(1, Math.min(52, Math.round(input.weeks))),
     deloadEvery: input.deloadEvery && input.deloadEvery > 1 ? input.deloadEvery : null,
@@ -453,7 +481,24 @@ export async function saveProgram(db: TrackerDB, input: ProgramInput): Promise<P
     deletedAt: null
   };
   await db.programs.put(program);
+  if (forClient) await copyCustomExercises(db, program);
   return program;
+}
+
+/**
+ * Your custom exercises in a client's program, copied to the client (they have the built-in library
+ * already). Kept in `athleteCache` marked `dirty` until the next sync sends them.
+ */
+async function copyCustomExercises(db: TrackerDB, program: Program) {
+  const ids = [...new Set(program.days.flatMap((d) => d.exercises.map((e) => e.exerciseId)))];
+  const mine = (await db.exercises.bulkGet(ids)).filter((e): e is Exercise => !!e && e.isCustom && !e.deletedAt);
+  const theirs = await db.athleteCache.bulkGet(mine.map((e) => `${program.athleteId}/exercises/${e.id}`));
+  const now = nowIso();
+  const copies = mine.filter((_, i) => !theirs[i]).map((e) => ({
+    key: `${program.athleteId}/exercises/${e.id}`, athleteId: program.athleteId, kind: 'exercises', id: e.id, updatedAt: now, dirty: true,
+    data: { ...e, favourite: false, createdAt: now, updatedAt: now } as unknown as Record<string, unknown>
+  }));
+  if (copies.length) await db.athleteCache.bulkPut(copies);
 }
 
 export async function deleteProgram(db: TrackerDB, id: string) {
@@ -468,7 +513,35 @@ export async function setProgramStatus(db: TrackerDB, id: string, status: Progra
 /** Start again from week 1 (past sessions stay in History). */
 export async function restartProgram(db: TrackerDB, id: string) {
   const now = nowIso();
-  await db.programs.update(id, { log: {}, status: 'active', startedAt: null, updatedAt: now });
+  await db.programs.update(id, { log: {}, status: 'active', startedAt: null, restartedAt: now, updatedAt: now });
+}
+
+/**
+ * Coach mode: gives a client their own copy of one of your programs (fresh progress, no 1RMs:
+ * % work uses the client's own best e1RMs unless you enter theirs). Edit it per client afterwards.
+ */
+export async function assignProgram(db: TrackerDB, programId: string, client: { athleteId: string; coachId: string; coachName: string | null }): Promise<Program> {
+  const source = await db.programs.get(programId);
+  if (!source) throw new Error('Program not found.');
+  const now = nowIso();
+  const copy: Program = {
+    ...source,
+    id: newId(),
+    athleteId: client.athleteId,
+    assignedBy: client.coachId,
+    coachName: client.coachName,
+    maxes: {},
+    status: 'active',
+    startedAt: null,
+    log: {},
+    restartedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null
+  };
+  await db.programs.put(copy);
+  await copyCustomExercises(db, copy);
+  return copy;
 }
 
 /** Mark a workout as skipped, so the program moves on to the next one. */
@@ -481,8 +554,8 @@ export async function skipProgramSlot(db: TrackerDB, id: string, slot: string, d
 }
 
 /** This exercise's recent sessions (newest first), working sets only. */
-async function recentHistory(db: TrackerDB, exerciseId: string, limit = 3): Promise<HistoryEntry[]> {
-  const sessions = (await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray()).filter((s) => s.athleteId === ME).sort(newestFirst);
+async function recentHistory(db: TrackerDB, exerciseId: string, athleteId: string, limit = 3): Promise<HistoryEntry[]> {
+  const sessions = (await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray()).filter((s) => s.athleteId === athleteId).sort(newestFirst);
   return sessions.slice(0, limit).map((s) => ({
     date: s.date,
     sets: s.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets).filter((x) => x.type !== 'warmup')
@@ -495,7 +568,7 @@ async function referenceMax(db: TrackerDB, program: Program, exerciseId: string,
   const since = addDays(today, -84);
   let best: { kg: number; date: string } | null = null;
   for (const s of await db.sessions.where('exerciseIds').equals(exerciseId).filter(alive).toArray()) {
-    if (s.date < since) continue;
+    if (s.date < since || s.athleteId !== program.athleteId) continue;
     for (const e of s.exercises) {
       if (e.exerciseId !== exerciseId) continue;
       for (const set of e.sets) {
@@ -519,7 +592,7 @@ export async function buildProgramDraft(db: TrackerDB, program: Program, slot: S
   const exercises: DraftExercise[] = [];
   for (const plan of day.exercises) {
     const exercise = await db.exercises.get(plan.exerciseId);
-    const history = await recentHistory(db, plan.exerciseId);
+    const history = await recentHistory(db, plan.exerciseId, program.athleteId);
     const rx = prescribe({
       plan, exercise, week: slot.week, deload, history, unit,
       ref1RM: plan.method === 'pct' ? await referenceMax(db, program, plan.exerciseId, date) : null,
@@ -544,7 +617,8 @@ export async function buildProgramDraft(db: TrackerDB, program: Program, slot: S
   }
   return {
     v: 2, unit, date, startedAt: nowIso(), templateId: null, notes: '', rest: null, exercises,
-    program: { programId: program.id, slot: slot.key, label: `${program.name} · Week ${slot.week}${deload ? ' (deload)' : ''} · ${day.name}` }
+    program: { programId: program.id, slot: slot.key, label: `${program.name} · Week ${slot.week}${deload ? ' (deload)' : ''} · ${day.name}` },
+    ...(program.athleteId !== ME ? { athleteId: program.athleteId } : {})
   };
 }
 
@@ -625,10 +699,11 @@ export async function exportAll(db: TrackerDB): Promise<ExportFile> {
     exportedAt: nowIso(),
     settings: await getSettings(db),
     exercises: await db.exercises.toArray(),
-    sessions: await db.sessions.toArray(),
-    templates: await db.templates.toArray(),
-    programs: await db.programs.toArray(),
-    metrics: await db.metrics.toArray(),
+    // Your own training only: clients' copies belong to their accounts.
+    sessions: await db.sessions.where('athleteId').equals(ME).toArray(),
+    templates: await db.templates.where('athleteId').equals(ME).toArray(),
+    programs: await db.programs.where('athleteId').equals(ME).toArray(),
+    metrics: await db.metrics.where('athleteId').equals(ME).toArray(),
     draft: await getDraft(db)
   };
 }

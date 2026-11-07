@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ProfileFields } from '../../components/ProfileFields';
+import { useIsClientView } from '../../hooks';
 import type { Exercise, Metric, Session, Settings } from '../../db/types';
 import { bodyweightFor, weighIns } from '../../lib/body';
 import { shortDate } from '../../lib/dates';
@@ -17,6 +18,7 @@ const LIFTS = [['squat', 'Squat'], ['bench', 'Bench'], ['deadlift', 'Deadlift']]
 
 /** Powerlifting total from your best squat, bench and deadlift, with DOTS and Wilks. */
 export function TotalPanel({ sessions, exercises, settings, metrics }: Props) {
+  const forClient = useIsClientView();
   const unit = settings.unit;
   const best = useMemo(() => bestLifts(sessions, exercises), [sessions, exercises]);
   const w = (kg: number) => `${formatWeight(kg, unit)} ${unit}`;
@@ -79,7 +81,11 @@ export function TotalPanel({ sessions, exercises, settings, metrics }: Props) {
         ) : (
           <p className="hint">Add your category and bodyweight (or log a weigh-in) to see DOTS and Wilks.</p>
         )}
-        <ProfileFields settings={settings} logged={body?.logged ? { kg: body.kg, asOf: body.asOf! } : null} />
+        {forClient ? (
+          <p className="hint">{settings.sex ? `Category: ${settings.sex === 'male' ? 'Men' : 'Women'}.` : 'Their category isn’t set (they can set it in their app).'} Bodyweight comes from their weigh-ins.</p>
+        ) : (
+          <ProfileFields settings={settings} logged={body?.logged ? { kg: body.kg, asOf: body.asOf! } : null} />
+        )}
       </div>
     </>
   );

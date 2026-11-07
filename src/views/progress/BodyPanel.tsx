@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ProgressChart } from '../../components/ProgressChart';
 import { ReminderSetting } from '../../components/ProfileFields';
+import { useIsClientView } from '../../hooks';
 import { db } from '../../db/db';
 import { deleteMetric, saveBodyweight } from '../../db/repo';
 import type { Metric, Settings } from '../../db/types';
@@ -16,6 +17,7 @@ type Range = 30 | 90 | 365;
 
 /** Bodyweight (with a 7-day average) and check-in trends. */
 export function BodyPanel({ metrics, settings }: { metrics: Metric[]; settings: Settings }) {
+  const forClient = useIsClientView(); // their weigh-ins are theirs to log
   const unit = settings.unit;
   const now = today();
   const [range, setRange] = useState<Range>(90);
@@ -88,10 +90,12 @@ export function BodyPanel({ metrics, settings }: { metrics: Metric[]; settings: 
             <span className="stat-sub">{change === null ? 'Needs a month of weigh-ins' : 'change in average'}</span>
           </div>
         </div>
-        <form className="bw-log" onSubmit={log}>
-          <input aria-label={`Today’s bodyweight (${unit})`} inputMode="decimal" placeholder={`Today (${unit})`} value={text} onChange={(e) => setText(e.target.value)} />
-          <button type="submit">Log</button>
-        </form>
+        {!forClient && (
+          <form className="bw-log" onSubmit={log}>
+            <input aria-label={`Today’s bodyweight (${unit})`} inputMode="decimal" placeholder={`Today (${unit})`} value={text} onChange={(e) => setText(e.target.value)} />
+            <button type="submit">Log</button>
+          </form>
+        )}
         {error && <p className="error">{error}</p>}
         {chart.values.length > 1 ? (
           <>
@@ -112,13 +116,17 @@ export function BodyPanel({ metrics, settings }: { metrics: Metric[]; settings: 
               <li key={e.date}>
                 <span>{shortDate(e.date)}</span>
                 <b>{formatWeight(e.kg, unit)} {unit}</b>
-                <button type="button" className="link" aria-label={`Delete weigh-in on ${shortDate(e.date)}`} onClick={() => void deleteMetric(db, recentIds.get(e.date)!)}>Delete</button>
+                {!forClient && <button type="button" className="link" aria-label={`Delete weigh-in on ${shortDate(e.date)}`} onClick={() => void deleteMetric(db, recentIds.get(e.date)!)}>Delete</button>}
               </li>
             ))}
           </ul>
         )}
-        <label className="sub reminder-label">Weigh-in reminder on the Log tab</label>
-        <ReminderSetting settings={settings} />
+        {!forClient && (
+          <>
+            <label className="sub reminder-label">Weigh-in reminder on the Log tab</label>
+            <ReminderSetting settings={settings} />
+          </>
+        )}
       </div>
 
       <div className="card">

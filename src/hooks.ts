@@ -1,10 +1,13 @@
 // Live data hooks: components re-render automatically when the database changes.
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import { db } from './db/db';
 import { checkinSkippedOn, DEFAULT_SETTINGS, getSettings, listExercises, listMetrics, listSessions, listTemplates } from './db/repo';
 import type { CloudProfile, CoachLink, Exercise, Metric, Session } from './db/types';
 import { findPRs, type PR } from './lib/prs';
+import { ME } from './db/types';
+import { currentAthlete } from './db/repo';
+import { overlayExercises } from './sync/athleteData';
 
 export const useSettings = () => useLiveQuery(() => getSettings(db), []) ?? DEFAULT_SETTINGS;
 export const useSessions = () => useLiveQuery(() => listSessions(db), []);
@@ -12,10 +15,17 @@ export const useTemplates = () => useLiveQuery(() => listTemplates(db), []);
 export const useMetrics = (): Metric[] | undefined => useLiveQuery(() => listMetrics(db), []);
 export const useCheckinSkipped = () => useLiveQuery(() => checkinSkippedOn(db), []);
 
-/** All exercises by id. Includes deleted ones so old sessions still show their names. */
+/**
+ * All exercises by id. Includes deleted ones so old sessions still show their names. When a coach
+ * is looking at a client, the client's own exercises are layered on top.
+ */
 export function useExerciseMap(): Map<string, Exercise> {
-  const all = useLiveQuery(() => db.exercises.toArray(), []);
-  return useMemo(() => new Map((all ?? []).map((e) => [e.id, e])), [all]);
+  const all = useLiveQuery(async () => {
+    const athlete = currentAthlete();
+    const mine = new Map((await db.exercises.toArray()).map((e) => [e.id, e]));
+    return athlete === ME ? mine : overlayExercises(mine, await db.athleteCache.where('athleteId').equals(athlete).toArray());
+  }, []);
+  return useMemo(() => all ?? new Map(), [all]);
 }
 
 /** PRs for every session (oldest-first maths), recomputed when history changes. */
@@ -44,3 +54,27 @@ export function useMyCoach(): CoachLink | null {
 }
 
 export const useAthleteCache = () => useLiveQuery(() => db.athleteCache.toArray(), []);
+
+// ---------- Whose training is on screen (coach mode switcher) ----------
+
+export interface AthleteView {
+  /** 'me', or a client's account id. */
+  id: string;
+  /** The client's name (null for you). */
+  name: string | null;
+}
+
+export const AthleteContext = createContext<AthleteView>({ id: ME, name: null });
+export const useAthlete = () => useContext(AthleteContext);
+export const useIsClientView = () => useContext(AthleteContext).id !== ME;
+
+/** Active clients (for the switcher), from the coach's links. */
+export function useClientList(): { id: string; name: string }[] {
+  const profile = useProfile();
+  const links = useLinks();
+  if (profile?.role !== 'coach') return [];
+  return links
+    .filter((l) => l.coachId === profile.id && l.status === 'active' && l.clientId)
+    .map((l) => ({ id: l.clientId!, name: l.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import type { CachedRecord, CoachLink, Exercise } from '../db/types';
-import { useAthleteCache, useExerciseMap, useLinks, useProfile, useSettings } from '../hooks';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import type { CoachLink, Exercise } from '../db/types';
+import { useExerciseMap, useLinks, useProfile, useSettings } from '../hooks';
 import { shortDate } from '../lib/dates';
 import { today } from '../lib/ids';
 import { formatCode } from '../lib/invite';
 import { ALERT_ORDER, summariseClient, type ClientSummary, type RosterAlert } from '../lib/roster';
 import { round, fromKg } from '../lib/units';
-import { athleteData, type AthleteData } from '../sync/athleteData';
+import { loadAthletes, type AthleteData } from '../sync/athleteData';
 import { useSyncStatus } from '../sync/controller';
 import { AddClientSheet, ShareInvite } from './clients/AddClientSheet';
 import { ClientSheet } from './clients/ClientSheet';
@@ -20,10 +22,9 @@ export interface ClientEntry {
 }
 
 /** The coach's roster: alerts first, then every client, then invites waiting to be accepted. */
-export function ClientsView() {
+export function ClientsView({ onOpenAthlete }: { onOpenAthlete: (id: string, name: string) => void }) {
   const profile = useProfile();
   const links = useLinks();
-  const cache = useAthleteCache();
   const baseExercises = useExerciseMap();
   const settings = useSettings();
   const sync = useSyncStatus();
@@ -33,23 +34,25 @@ export function ClientsView() {
   const date = today();
 
   const mine = links.filter((l) => l.coachId === profile?.id);
+  const active = mine.filter((l) => l.status === 'active' && l.clientId);
+  const ids = active.map((l) => l.clientId!).join(',');
+  const loaded = useLiveQuery(() => loadAthletes(db, ids ? ids.split(',') : [], baseExercises as Map<string, Exercise>), [ids, baseExercises]);
   const entries: ClientEntry[] = useMemo(() => {
-    const byAthlete = new Map<string, CachedRecord[]>();
-    for (const r of cache ?? []) byAthlete.set(r.athleteId, [...(byAthlete.get(r.athleteId) ?? []), r]);
-    return mine
-      .filter((l) => l.status === 'active' && l.clientId)
+    if (!loaded) return [];
+    return active
+      .filter((link) => loaded.has(link.clientId!))
       .map((link) => {
-        const rows = byAthlete.get(link.clientId!) ?? [];
-        const data = athleteData(rows, baseExercises as Map<string, Exercise>);
+        const data = loaded.get(link.clientId!)!;
         const summary = summariseClient({
           sessions: data.sessions, metrics: data.metrics, programs: data.programs, exercises: data.exercises,
           reminder: link.bodyweightReminder, target: link.weeklyTarget, joinedAt: link.joinedAt, today: date
         });
-        const lastSeen = rows.reduce<string | null>((max, r) => (!max || r.updatedAt > max ? r.updatedAt : max), null);
+        const stamps = [...data.sessions, ...data.metrics, ...data.programs].map((r) => r.updatedAt);
+        const lastSeen = stamps.reduce<string | null>((max, s) => (!max || s > max ? s : max), null);
         return { link, data, summary, lastSeen };
       })
       .sort((a, b) => a.link.name.localeCompare(b.link.name));
-  }, [cache, links, profile?.id, baseExercises, date]);
+  }, [loaded, links, profile?.id, date]);
   const invites = mine.filter((l) => l.status === 'invited');
 
   if (!sync.user) return <p className="hint">Sign in (Settings → Account) to manage clients.</p>;
@@ -104,7 +107,7 @@ export function ClientsView() {
 
       <AddClientSheet open={adding} coachName={profile?.name ?? null} onClose={() => setAdding(false)} />
       <ShareInvite link={sharing} coachName={profile?.name ?? null} onClose={() => setSharing(null)} />
-      <ClientSheet entry={current} unit={settings.unit} onClose={() => setOpen(null)} />
+      <ClientSheet entry={current} unit={settings.unit} onClose={() => setOpen(null)} onOpenAthlete={(id, name) => { setOpen(null); onOpenAthlete(id, name); }} />
     </>
   );
 }

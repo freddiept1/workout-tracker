@@ -57,6 +57,8 @@ export function resolve(kind: SyncKind, local: LocalRecord | undefined, remote: 
 
   const winner = (remoteNewer ? remote : local) as unknown as Program;
   const loser = (remoteNewer ? local : remote) as unknown as Program;
+  // After a "Restart", the old run's ticks don't come back.
+  if ((winner.restartedAt ?? null) !== (loser.restartedAt ?? null)) return remoteNewer ? remote : null;
   const missing = Object.keys(loser.log ?? {}).filter((k) => !(k in (winner.log ?? {})));
   if (!missing.length) return remoteNewer ? remote : null;
   // Both sides added something: keep everything, and mark it as a new edit so it syncs back.

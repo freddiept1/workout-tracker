@@ -2,6 +2,28 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Programs for clients and logging in person (2026-11-07)
+
+Stage 4 of coach mode.
+
+### Added
+- **"Me ▾" switcher** in the top bar (coaches with clients): pick a client and History, Progress, Plan and Log show their training, with a "Viewing Sam's training · Back to me" banner. The Clients tab has **Open Sam's training** too.
+- **Log in person:** with a client picked, a workout you start (template, program day, repeat or empty) is saved to **their** account. It's pre-filled from their history, and their PRs are celebrated.
+- **Programs for clients** (Plan, while viewing a client):
+  - **Assign one of mine:** they get their own copy, with fresh progress and no 1RMs, so % work uses their own best lifts.
+  - **New for Sam:** write one from scratch.
+  - Edit, restart or archive their programs. Your custom exercises are copied to them.
+- **On the client's phone:** your program shows as **"From Freddie"** and appears on their Log tab. They can start and skip days, but not edit, restart or delete it (the cloud enforces this too).
+
+### Changed
+- Days ticked off on any phone are merged into the program's log, so a coach's edit never loses a client's progress. A **Restart** clears it on purpose.
+- When viewing a client: their weigh-ins and check-ins can't be logged or deleted, and their category and bodyweight on the Total screen are read-only.
+- Backups contain only your own training, merging duplicate exercises only rewrites your own history, and "best e1RM" for % programs only uses the right person's lifts.
+- Remove data, delete account and leave coach now confirm inside the page instead of in a pop-up (some browsers block pop-ups silently).
+
+### Fixed
+- A coach's sync could fail ("row-level security") after a client left or deleted their account, if the coach's phone still had records of theirs to send. Each sync now checks the current client list first and only sends records for current clients.
+
 ## Clients and invites (2026-11-07)
 
 Stage 3 of coach mode.

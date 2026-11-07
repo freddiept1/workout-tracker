@@ -14,10 +14,15 @@ import type { ClientEntry } from '../ClientsView';
 import { ReminderPicker, TargetPicker } from './AddClientSheet';
 
 /** One client: how they're doing, their recent workouts, and the settings you control for them. */
-export function ClientSheet({ entry, unit, onClose }: { entry: ClientEntry | null; unit: Unit; onClose: () => void }) {
+export function ClientSheet({ entry, unit, onClose, onOpenAthlete }: { entry: ClientEntry | null; unit: Unit; onClose: () => void; onOpenAthlete: (id: string, name: string) => void }) {
   return (
     <Sheet open={!!entry} title={entry?.link.name ?? ''} onClose={onClose}>
-      {entry && <ClientBody entry={entry} unit={unit} onClose={onClose} />}
+      {entry && (
+        <>
+          <button type="button" className="full" onClick={() => onOpenAthlete(entry.link.clientId!, entry.link.name)}>Open {entry.link.name.split(' ')[0]}’s training</button>
+          <ClientBody entry={entry} unit={unit} onClose={onClose} />
+        </>
+      )}
     </Sheet>
   );
 }
@@ -109,7 +114,7 @@ function ClientBody({ entry, unit, onClose }: { entry: ClientEntry; unit: Unit; 
             );
           })}
         </ul>
-        <p className="hint">{entry.lastSeen ? `Last update from ${link.name.split(' ')[0]}’s phone: ${shortDate(entry.lastSeen.slice(0, 10))}.` : ''} Their full history and progress charts arrive with the next update.</p>
+        <p className="hint">{entry.lastSeen ? `Last update from ${link.name.split(' ')[0]}’s phone: ${shortDate(entry.lastSeen.slice(0, 10))}.` : ''} Open their training (top) for full history, progress, programs and logging.</p>
       </div>
 
       <TargetPicker value={link.weeklyTarget} onChange={(n) => void save({ weeklyTarget: n })} />

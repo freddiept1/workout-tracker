@@ -61,6 +61,21 @@ begin
       return null; -- keep the newer copy already here
     end if;
     new.owner_id := old.owner_id;
+    if new.kind = 'programs' then
+      -- Days ticked off on any device are never lost: logs are merged (unless the program was restarted).
+      if coalesce(new.data->>'restartedAt', '') = coalesce(old.data->>'restartedAt', '') then
+        new.data := jsonb_set(new.data, '{log}', coalesce(old.data->'log', '{}'::jsonb) || coalesce(new.data->'log', '{}'::jsonb));
+      end if;
+      -- On a program their coach wrote, a client can only tick off or skip days: the plan stays the coach's.
+      if auth.uid() = old.athlete_id and old.owner_id <> auth.uid() then
+        new.data := old.data || jsonb_build_object(
+          'log', new.data->'log',
+          'status', coalesce(new.data->'status', old.data->'status'),
+          'startedAt', coalesce(new.data->'startedAt', old.data->'startedAt'),
+          'updatedAt', new.data->'updatedAt');
+        new.deleted_at := old.deleted_at;
+      end if;
+    end if;
   end if;
   new.synced_at := clock_timestamp();
   return new;
@@ -225,3 +240,27 @@ revoke execute on function public.new_invite_code, public.is_coach, public.is_my
 grant execute on function public.new_invite_code, public.is_coach, public.is_my_client, public.my_coach,
   public.invite_info, public.accept_invite, public.end_coaching, public.delete_my_account to authenticated;
 grant execute on function public.invite_info to anon;
+
+-- =====================================================================================
+-- Stage 4: the coach writes clients' programs and logs their sessions in person
+-- =====================================================================================
+
+-- Insert: your own records, or (as their coach) a client's sessions, programs and exercises.
+drop policy if exists "add own records" on public.records;
+create policy "add own records" on public.records for insert with check (
+  owner_id = auth.uid() and (
+    athlete_id = auth.uid()
+    or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises'))
+  )
+);
+
+-- A client's records stay theirs even if the coach who wrote them deletes their account.
+alter table public.records alter column owner_id drop not null;
+alter table public.records drop constraint if exists records_owner_id_fkey;
+alter table public.records add constraint records_owner_id_fkey foreign key (owner_id) references auth.users on delete set null;
+
+-- Update: the same. (A coach can't change a client's weigh-ins, check-ins, templates or settings.)
+drop policy if exists "change own records" on public.records;
+create policy "change own records" on public.records for update
+  using (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises')))
+  with check (athlete_id = auth.uid() or (public.is_my_client(athlete_id) and kind in ('sessions', 'programs', 'exercises')));

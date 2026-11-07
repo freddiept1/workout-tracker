@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { db } from '../db/db';
 import { LEGACY_KEY } from '../db/migrateLegacy';
 import { cloudConfigured } from './config';
-import { forgetSync, getSyncState, isApplyingRemote, syncAthletes, syncOnce, AccountMismatchError } from './engine';
+import { forgetSync, getSyncState, isApplyingRemote, removeAllAthletes, syncAthletes, syncOnce, AccountMismatchError } from './engine';
 
 export interface SyncStatus {
   configured: boolean;
@@ -43,7 +43,7 @@ export async function startSync() {
 
   // Any local change schedules a sync a few seconds later (changes made by sync itself don't).
   const changed = () => { if (!isApplyingRemote()) schedule(AFTER_CHANGE_MS); };
-  for (const t of [db.exercises, db.sessions, db.templates, db.programs, db.metrics]) {
+  for (const t of [db.exercises, db.sessions, db.templates, db.programs, db.metrics, db.athleteCache] as typeof db.sessions[]) {
     t.hook('creating', changed);
     t.hook('updating', changed);
   }
@@ -77,8 +77,10 @@ export function syncNow(): Promise<void> {
       try {
         if (!navigator.onLine) throw new TypeError('offline');
         const uid = status.user!.id;
-        await syncOnce(db, supabaseRemote, uid);
-        await refreshCoaching(uid);
+        // Who your clients are right now, first: only their records are sent, and anyone who left is dropped.
+        const clients = await refreshCoaching(uid);
+        await syncOnce(db, supabaseRemote, uid, undefined, clients);
+        await syncAthletes(db, supabaseRemote, clients);
         set({ state: 'idle', lastSyncAt: (await getSyncState(db))?.lastSyncAt ?? null });
       } catch (err) {
         const offline = err instanceof TypeError || /connection|fetch|network|offline/i.test(String((err as Error).message));
@@ -91,15 +93,14 @@ export function syncNow(): Promise<void> {
 }
 
 /**
- * Profile (are you a coach?), coach/client links, and, for a coach, fresh read-only copies of
- * each active client's training. Saved in `meta` so the app knows all this offline too.
+ * Profile (are you a coach?) and coach/client links, saved in `meta` so the app knows them offline
+ * too. Returns a coach's currently linked clients (empty for everyone else).
  */
-async function refreshCoaching(uid: string) {
-  const { fetchProfile, fetchLinks, supabaseRemote } = await import('./cloud');
+async function refreshCoaching(uid: string): Promise<string[]> {
+  const { fetchProfile, fetchLinks } = await import('./cloud');
   const [profile, links] = await Promise.all([fetchProfile(uid), fetchLinks(uid)]);
   await db.meta.bulkPut([{ key: 'profile', value: profile }, { key: 'links', value: links }]);
-  const clients = profile?.role === 'coach' ? links.filter((l) => l.coachId === uid && l.status === 'active' && l.clientId).map((l) => l.clientId!) : [];
-  await syncAthletes(db, supabaseRemote, clients);
+  return profile?.role === 'coach' ? links.filter((l) => l.coachId === uid && l.status === 'active' && l.clientId).map((l) => l.clientId!) : [];
 }
 
 /** After a coach action (invite, remove…): reload links straight away. */
@@ -144,7 +145,9 @@ export async function signOutAndMaybeErase(removeData: boolean) {
 
 /** Clients' data and coach links never stay on a phone nobody is signed in to. */
 async function forgetCoaching() {
-  await db.athleteCache.clear();
+  await removeAllAthletes(db);
+  const state = await getSyncState(db);
+  if (state) await db.meta.put({ key: 'sync', value: { ...state, athletes: {} } });
   await db.meta.bulkDelete(['profile', 'links']);
 }
 

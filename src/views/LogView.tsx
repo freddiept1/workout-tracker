@@ -4,12 +4,13 @@ import { createPortal } from 'react-dom';
 import { db } from '../db/db';
 import { finishDraft, lastPerformance, listPrograms, updateExercise } from '../db/repo';
 import type { Draft, DraftExercise, DraftSet, Exercise, Program, Settings, Template, Unit } from '../db/types';
+import { ME } from '../db/types';
 import { isDeloadWeek, nextSlot, type Slot } from '../lib/programs';
 import { Wordmark } from '../components/Logo';
 import { BodyweightCard } from '../components/BodyweightCard';
 import { CheckinCard } from '../components/CheckinCard';
 import { StreakCard } from '../components/StreakCard';
-import { useCheckinSkipped, useExerciseMap, useMetrics, useSessions, useTemplates } from '../hooks';
+import { useAthlete, useCheckinSkipped, useExerciseMap, useMetrics, useSessions, useTemplates } from '../hooks';
 import { unlockAudio } from '../lib/alerts';
 import { shortDate } from '../lib/dates';
 import { afterTick, blankSet, finishPlan, groupLetters, linkWithNext, move, newDraftExercise, unlink } from '../lib/draft';
@@ -40,6 +41,8 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const metrics = useMetrics();
   const checkinSkipped = useCheckinSkipped();
   const exercises = useExerciseMap();
+  const athlete = useAthlete();
+  const forClient = athlete.id !== ME;
   const unit = settings.unit;
   const plates = settings.equipment[unit];
   const [picker, setPicker] = useState(false);
@@ -51,15 +54,17 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
   const [warmupPicker, setWarmupPicker] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
-  async function entryFor(ex: Exercise, u: Unit): Promise<DraftExercise> {
-    return newDraftExercise(ex, (await lastPerformance(db, ex.id))?.sets ?? null, u);
+  // Pre-fill from the history of whoever the workout is for (a client, when logging for them).
+  async function entryFor(ex: Exercise, u: Unit, whose = draft?.athleteId ?? athlete.id): Promise<DraftExercise> {
+    return newDraftExercise(ex, (await lastPerformance(db, ex.id, whose))?.sets ?? null, u);
   }
 
   async function start(template: Template | null) {
     const list = template ? template.exercises.map((e) => exercises.get(e.exerciseId)).filter((e): e is Exercise => !!e) : [];
     onChange({
       v: 2, unit, date: today(), startedAt: nowIso(), templateId: template?.id ?? null, notes: '', rest: null,
-      exercises: await Promise.all(list.map((e) => entryFor(e, unit)))
+      exercises: await Promise.all(list.map((e) => entryFor(e, unit, athlete.id))),
+      ...(forClient ? { athleteId: athlete.id, athleteName: athlete.name ?? undefined } : {})
     });
     if (!template) setPicker(true);
   }
@@ -68,8 +73,9 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
     return (
       <>
         <Wordmark />
-        {metrics && <CheckinCard metrics={metrics} skippedOn={checkinSkipped} />}
-        {metrics && <BodyweightCard metrics={metrics} settings={settings} />}
+        {forClient && <p className="hint center">Workouts you start here are logged to <b>{athlete.name}</b>’s account.</p>}
+        {!forClient && metrics && <CheckinCard metrics={metrics} skippedOn={checkinSkipped} />}
+        {!forClient && metrics && <BodyweightCard metrics={metrics} settings={settings} />}
         {sessions && <StreakCard sessions={sessions} />}
         {programs?.map((p) => {
           const next = nextSlot(p);
@@ -214,6 +220,7 @@ export function LogView({ draft, settings, onChange, onSaved, onStartProgram }: 
 
   return (
     <>
+      {d.athleteId && <div className="program-banner for-client">👤 Logging for <b>{d.athleteName ?? 'your client'}</b>: saved to their account</div>}
       {d.program && <div className="program-banner">📋 {d.program.label}</div>}
       <div className="card row">
         <div className="grow">

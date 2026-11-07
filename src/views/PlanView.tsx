@@ -2,9 +2,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import { Sheet } from '../components/Sheet';
 import { db } from '../db/db';
-import { deleteProgram, listPrograms, restartProgram, setProgramStatus, skipProgramSlot, type ProgramInput } from '../db/repo';
+import { assignProgram, deleteProgram, listPrograms, restartProgram, setProgramStatus, skipProgramSlot, type ProgramInput } from '../db/repo';
 import type { Program, Unit } from '../db/types';
-import { useExerciseMap, useSessions } from '../hooks';
+import { ME } from '../db/types';
+import { useAthlete, useExerciseMap, useProfile, useSessions } from '../hooks';
 import { shortDate } from '../lib/dates';
 import { EXAMPLE_PROGRAMS } from '../lib/examplePrograms';
 import { today } from '../lib/ids';
@@ -22,6 +23,9 @@ interface Props {
 /** Programs (multi-week plans), plateau warnings, and single-day templates. */
 export function PlanView({ unit, onStart }: Props) {
   const [panel, setPanel] = useState<'programs' | 'templates'>('programs');
+  const athlete = useAthlete();
+  // A client's plan: just their programs (templates are your own, under Me).
+  if (athlete.id !== ME) return <Programs unit={unit} onStart={onStart} />;
   return (
     <>
       <div className="segmented panel-tabs">
@@ -35,11 +39,19 @@ export function PlanView({ unit, onStart }: Props) {
 
 function Programs({ unit, onStart }: Props) {
   const programs = useLiveQuery(() => listPrograms(db), []);
+  const profile = useProfile();
+  const coachId = profile?.id;
+  const coachName = profile?.name;
   const sessions = useSessions();
   const exercises = useExerciseMap();
   const [editing, setEditing] = useState<(ProgramInput & { id?: string }) | null | 'new'>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [examples, setExamples] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const athlete = useAthlete();
+  const forClient = athlete.id !== ME;
+  const first = athlete.name?.split(' ')[0];
+  const myPrograms = useLiveQuery(() => (forClient ? listPrograms(db, ME) : Promise.resolve([])), [forClient]);
   const plateaus = useMemo(() => (sessions ? findPlateaus(sessions, exercises, today()) : []), [sessions, exercises]);
   if (!programs) return null;
 
@@ -47,14 +59,39 @@ function Programs({ unit, onStart }: Props) {
   const finished = programs.filter((p) => p.status !== 'active');
   const shown = detail ? programs.find((p) => p.id === detail) ?? null : null;
 
+  async function assign(p: Program) {
+    setAssigning(false);
+    await assignProgram(db, p.id, { athleteId: athlete.id, coachId: coachId!, coachName: coachName ?? null });
+  }
+
   return (
     <>
+      {forClient && <h2 className="first-heading">{first}’s programs</h2>}
       {active.map((p) => <ProgramCard key={p.id} program={p} onOpen={() => setDetail(p.id)} onStart={onStart} />)}
-      {!active.length && <p className="empty">No program running. Build your own, or start from an example.</p>}
-      <div className="row button-row">
-        <button type="button" className="grow" onClick={() => setEditing('new')}>+ New program</button>
-        <button type="button" className="ghost grow" onClick={() => setExamples(true)}>Examples</button>
-      </div>
+      {!active.length && (
+        <p className="empty">{forClient ? `${first} has no program running. Give them one of yours, or write one just for them.` : 'No program running. Build your own, or start from an example.'}</p>
+      )}
+      {forClient ? (
+        <div className="row button-row">
+          <button type="button" className="grow" disabled={!coachId} onClick={() => setAssigning(true)}>Assign one of mine</button>
+          <button type="button" className="ghost grow" onClick={() => setEditing('new')}>New for {first}</button>
+        </div>
+      ) : (
+        <div className="row button-row">
+          <button type="button" className="grow" onClick={() => setEditing('new')}>+ New program</button>
+          <button type="button" className="ghost grow" onClick={() => setExamples(true)}>Examples</button>
+        </div>
+      )}
+      <Sheet open={assigning} title={`Assign to ${first}`} onClose={() => setAssigning(false)}>
+        <p className="hint">{first} gets their own copy: fresh progress, and % work uses their own best lifts unless you enter their 1RMs (Edit, after assigning). Editing their copy doesn’t change yours.</p>
+        {!myPrograms?.length && <p className="empty">You haven’t made any programs yet. Switch to Me → Plan to build one, or use “New for {first}”.</p>}
+        {myPrograms?.map((p) => (
+          <button type="button" key={p.id} className="card list-card" onClick={() => void assign(p)}>
+            <span className="card-title">{p.name}</span>
+            <span className="card-sub">{p.weeks} weeks · {p.days.length} day{p.days.length === 1 ? '' : 's'} a week</span>
+          </button>
+        ))}
+      </Sheet>
 
       {plateaus.length > 0 && (
         <div className="card plateau-card">
@@ -109,9 +146,11 @@ function Programs({ unit, onStart }: Props) {
 function ProgramCard({ program, onOpen, onStart }: { program: Program; onOpen: () => void; onStart: Props['onStart'] }) {
   const next = nextSlot(program);
   const { done, total, pct } = progressOf(program);
+  const fromCoach = useFromCoach(program);
   return (
     <div className="card program-card">
       <button type="button" className="program-open" onClick={onOpen}>
+        {fromCoach && <span className="from-coach">From {program.coachName ?? 'your coach'}</span>}
         <span className="card-title">{program.name}</span>
         <span className="card-sub">
           {next ? <>Next: Week {next.week}{isDeloadWeek(program, next.week) ? ' (deload)' : ''} · {program.days[next.day]?.name}</> : 'All done'} · {done}/{total} workouts
@@ -133,6 +172,7 @@ function ProgramDetail({ program, unit, exerciseName, onClose, onStart, onEdit }
 }) {
   const p = program;
   const next = p ? nextSlot(p) : null;
+  const fromCoach = useFromCoach(p); // a client looking at a program their coach wrote: follow it, don't edit it
   return (
     <Sheet open={!!p} title={p?.name ?? ''} onClose={onClose}>
       {p && (
@@ -175,16 +215,28 @@ function ProgramDetail({ program, unit, exerciseName, onClose, onStart, onEdit }
             <p className="hint">1RMs entered: {Object.entries(p.maxes).map(([id, kg]) => `${exerciseName(id)} ${formatWeight(kg, unit)} ${unit}`).join(', ')}.</p>
           )}
 
-          <div className="row wrap">
-            <button type="button" className="ghost grow" onClick={() => onEdit(p)}>Edit</button>
-            <button type="button" className="ghost grow" onClick={() => confirm('Start this program again from week 1? Past workouts stay in History.') && restartProgram(db, p.id)}>Restart</button>
-            {p.status === 'active'
-              ? <button type="button" className="ghost grow" onClick={() => { setProgramStatus(db, p.id, 'archived'); onClose(); }}>Archive</button>
-              : <button type="button" className="ghost grow" onClick={() => setProgramStatus(db, p.id, 'active')}>Make active</button>}
-          </div>
-          <button type="button" className="danger full" onClick={() => { if (confirm(`Delete “${p.name}”? Its workouts stay in History.`)) { deleteProgram(db, p.id); onClose(); } }}>Delete program</button>
+          {fromCoach ? (
+            <p className="hint">Written for you by {p.coachName ?? 'your coach'}. Ask them if anything needs changing.</p>
+          ) : (
+            <>
+              <div className="row wrap">
+                <button type="button" className="ghost grow" onClick={() => onEdit(p)}>Edit</button>
+                <button type="button" className="ghost grow" onClick={() => confirm('Start this program again from week 1? Past workouts stay in History.') && restartProgram(db, p.id)}>Restart</button>
+                {p.status === 'active'
+                  ? <button type="button" className="ghost grow" onClick={() => { setProgramStatus(db, p.id, 'archived'); onClose(); }}>Archive</button>
+                  : <button type="button" className="ghost grow" onClick={() => setProgramStatus(db, p.id, 'active')}>Make active</button>}
+              </div>
+              <button type="button" className="danger full" onClick={() => { if (confirm(`Delete “${p.name}”? Its workouts stay in History.`)) { deleteProgram(db, p.id); onClose(); } }}>Delete program</button>
+            </>
+          )}
         </div>
       )}
     </Sheet>
   );
+}
+
+/** True when this is a program a coach wrote for you (you're the client): follow it, don't edit it. */
+function useFromCoach(p: Program | null): boolean {
+  const profile = useProfile();
+  return !!p?.assignedBy && p.assignedBy !== profile?.id;
 }

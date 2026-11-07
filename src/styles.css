@@ -836,3 +836,37 @@ button.link.inline { min-height: 0; padding: 0; font-size: inherit; display: inl
 .client-sessions li { padding: 8px 0; border-top: 1px solid var(--border); }
 .client-sessions li b { margin-right: 6px; font-size: 0.9rem; }
 .client-sessions .card-sub { display: block; }
+
+/* Coach mode: switcher, client banner */
+.athlete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  max-width: 120px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.athlete-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.athlete-btn.client { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--accent-text); }
+.athlete-list button.on { color: var(--accent); font-weight: 700; }
+.athlete-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 0.9rem;
+}
+.program-banner.for-client { background: var(--accent-soft); }
+.from-coach { display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+.first-heading { margin-top: 4px; }
+.confirm-card { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
