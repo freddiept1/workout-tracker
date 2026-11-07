@@ -34,7 +34,7 @@ e1RM, PRs, rep maxes, weekly hard sets per muscle group, tonnage and the total/D
 | 6 | `achievements` | id, athleteId, badgeId, earnedAt, data |
 | 6 | `quests`, `bosses` | id, athleteId, kind, target, progress, startsAt, endsAt, status |
 | 6 | `meta.profile` | sex, bodyweight, weekly session target, game layer on/off |
-| 7 | (sync) | Supabase mirror of the tables above, keyed by id; last-write-wins on `updatedAt`, deletes via `deletedAt` |
+| 7 | (sync) | Built: one Supabase table `records` (athlete_id, kind, id, data, updated_at, deleted_at, synced_at) mirrors every synced record; last-write-wins on `updatedAt`, deletes via `deletedAt`. See `supabase/schema.sql` and `src/sync/` |
 
 ## Later (designed for, not built)
 

@@ -75,8 +75,9 @@ Your streak counts training days in a row, and up to **2 rest days** in a row ke
 - **Settings** (gear icon): theme (Dark / Light / Match phone), kg or lb (weights are converted), lifter profile, weigh-in reminder, rest timer beep and notifications, bar/collar/plates, backup Export/Import.
 
 ## Your data
-Everything is stored on your phone only, in the browser's database (IndexedDB). Nothing is sent anywhere.
-- Your phone and your computer each keep their own data.
+Everything is stored on your phone, in the browser's database (IndexedDB), and works offline.
+- **Signed out:** nothing is sent anywhere. Your phone and your computer each keep their own data.
+- **Signed in** (Settings → Account, with an emailed code): your data also syncs to your account in the cloud (Supabase, London), so it's backed up and the same on every device you sign in on. The newer edit wins; deletions sync as markers, so nothing is wiped. Setup steps for the cloud project are in `docs/CLOUD_SETUP.md`.
 - **Back up now and then:** Settings → **Export** opens the share sheet so you can save the file to Files or iCloud Drive. **Import** restores a backup (old-format backups work too) and replaces what's in the app.
 
 ## Developing

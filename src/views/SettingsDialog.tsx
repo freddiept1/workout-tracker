@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ProfileFields, ReminderSetting } from '../components/ProfileFields';
 import { useMetrics } from '../hooks';
+import { resetPushCursor } from '../sync/engine';
+import { AccountSection } from './settings/AccountSection';
+import { useSyncStatus } from '../sync/controller';
 import { bodyweightFor, weighIns } from '../lib/body';
 import { db } from '../db/db';
 import { exportAll, importAll, setUnit, updateSettings } from '../db/repo';
@@ -25,6 +28,7 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
   const unit = settings.unit;
   const setup = settings.equipment[unit];
   const metrics = useMetrics();
+  const sync = useSyncStatus();
   const body = metrics ? bodyweightFor(weighIns(metrics), settings.bodyweightKg) : null;
 
   useEffect(() => {
@@ -50,6 +54,7 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
     if (!confirm(`Replace everything in this tracker with the backup "${file.name}"?`)) return;
     try {
       const { sessions } = await importAll(db, await file.text());
+      await resetPushCursor(db); // signed in: send everything up again (the cloud keeps whichever copy is newer)
       alert(`Backup restored: ${sessions} workouts.`);
       onImported();
     } catch (err) {
@@ -61,6 +66,7 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
     <dialog ref={dialog} onClose={onClose}>
       <form method="dialog" className="stack">
         <h2>Settings</h2>
+        <AccountSection />
         <div>
           <label>Theme</label>
           <div className="segmented">
@@ -147,7 +153,9 @@ export function SettingsDialog({ open, settings, onClose, onImported }: Props) {
             <button type="button" className="ghost grow" onClick={exportData}>Export</button>
             <button type="button" className="ghost grow" onClick={() => fileInput.current?.click()}>Import</button>
           </div>
-          <p className="hint">Your data lives only on this device. Export now and then to keep a copy.</p>
+          <p className="hint">
+            {sync.user ? 'Your data is on this device and synced to your account. A backup file is still a good extra copy.' : 'Your data lives only on this device. Export now and then to keep a copy.'}
+          </p>
           <input
             ref={fileInput} type="file" accept="application/json,.json" hidden
             onChange={(e) => { importData(e.target.files?.[0]); e.target.value = ''; }}

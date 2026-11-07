@@ -277,6 +277,7 @@ export interface MigrationInfo {
 }
 
 export interface MetaRow {
-  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped'; // checkinSkipped: date the check-in card was dismissed
+  key: 'settings' | 'draft' | 'migration' | 'library' | 'checkinSkipped' | 'sync'; // checkinSkipped: date the check-in card was dismissed
+  updatedAt?: string; // settings: when they last changed (for sync)
   value: unknown;
 }

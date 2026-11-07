@@ -151,7 +151,7 @@ export async function lastPerformance(db: TrackerDB, exerciseId: string): Promis
 
 export async function updateSettings(db: TrackerDB, patch: Partial<Settings>) {
   const settings = await getSettings(db);
-  await db.meta.put({ key: 'settings', value: { ...settings, ...patch } });
+  await db.meta.put({ key: 'settings', value: { ...settings, ...patch }, updatedAt: nowIso() });
 }
 
 export const setUnit = (db: TrackerDB, unit: Settings['unit']) => updateSettings(db, { unit });

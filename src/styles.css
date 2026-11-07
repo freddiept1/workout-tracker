@@ -703,6 +703,13 @@ dialog.celebrate::backdrop { background: rgba(0, 0, 0, 0.6); }
 .streak-sub { font-size: 0.82rem; color: var(--muted); }
 .streak-sub b { color: var(--accent); }
 
+/* Account (Settings) */
+.account-intro { margin: 0 0 8px; }
+.account-card { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.account-card .card-title { font-size: 0.95rem; overflow-wrap: anywhere; }
+.code-input { letter-spacing: 0.3em; font-weight: 700; text-align: center; }
+.stack-sm > * + * { margin-top: 8px; }
+
 /* Body metrics: check-in and weigh-in cards */
 button.link { min-height: 36px; padding: 4px 6px; background: none; border: 0; color: var(--accent); font-size: 0.85rem; font-weight: 600; }
 .checkin-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }

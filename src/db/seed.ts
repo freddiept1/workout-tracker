@@ -26,6 +26,8 @@ export function libraryExercise(entry: LibraryEntry, now: string): Exercise {
   };
 }
 
+export const LIBRARY_EPOCH = '2000-01-01T00:00:00.000Z';
+
 const TAGS = ['parentId', 'muscles', 'pattern', 'equipment', 'mechanic', 'aliases', 'defaultTempo', 'defaultDistanceM', 'defaultTarget', 'unilateral'] as const;
 const isEmpty = (v: unknown) => v === undefined || v === null || (Array.isArray(v) && v.length === 0);
 
@@ -40,7 +42,9 @@ export async function applyLibrary(db: TrackerDB, force = false): Promise<{ adde
     const done = (await db.meta.get('library'))?.value as { version: number } | undefined;
     if (!force && done && done.version >= LIBRARY_VERSION) return { added: 0, updated: 0 };
     const now = nowIso();
-    const wanted = LIBRARY.map((e) => libraryExercise(e, now));
+    // Built-in exercises get a fixed, old timestamp so a newly installed device never overwrites
+    // your edits to them when it syncs (the newer edit wins).
+    const wanted = LIBRARY.map((e) => libraryExercise(e, LIBRARY_EPOCH));
     const existing = await db.exercises.bulkGet(wanted.map((e) => e.id));
     const puts: Exercise[] = [];
     let added = 0;
@@ -60,7 +64,7 @@ export async function applyLibrary(db: TrackerDB, force = false): Promise<{ adde
           }
         }
         if (ex.isCustom) { filled.isCustom = false; changed = true; }
-        if (changed) { puts.push({ ...filled, updatedAt: now }); updated++; }
+        if (changed) { puts.push(filled); updated++; } // every device fills the same tags, so no new timestamp
       }
     });
     if (puts.length) await db.exercises.bulkPut(puts);

@@ -2,6 +2,27 @@
 
 All notable changes to the Workout Tracker. Newest first.
 
+## Accounts and cloud sync (2026-11-07)
+
+Stage 2 of coach mode.
+
+### Added
+- **Sign in** in Settings → Account with your email and a code emailed to you (no password). The code is typed into the app, so it works in the installed iPhone app.
+- **Cloud sync** (Supabase, London) of exercises, workouts, templates, programs, weigh-ins, check-ins and settings.
+  - The phone keeps its own full copy and works offline. Changes sync on open, a few seconds after any change, when signal comes back, every 5 minutes, and on **Sync now**.
+  - The newer edit wins when two devices change the same thing. Ticked program days are merged, never lost.
+  - Deletions sync as "deleted" markers, so nothing is ever wiped by a sync.
+  - A new device takes on your templates instead of adding duplicate starter ones.
+  - The in-progress workout stays on the device it was started on.
+- **Sign out** keeps your data on the phone, or removes it from the phone (it syncs first, so the cloud copy has everything).
+- Security rules in the database: each account can only read and write its own training, and nobody can make themselves a coach.
+- `supabase/schema.sql` (the cloud tables) and `docs/CLOUD_SETUP.md` (setup steps).
+
+### Changed
+- Settings remember when they were last changed, so they sync too.
+- Built-in library exercises get a fixed old date, so a new device never overwrites your edits to them.
+- Restoring a backup while signed in sends everything to the cloud again (newer cloud copies are kept).
+
 ## Body metrics (2026-11-07)
 
 Stage 1 of coach mode. It works on your own phone straight away and needs no cloud.

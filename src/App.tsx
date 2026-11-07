@@ -16,6 +16,7 @@ import { HistoryView } from './views/HistoryView';
 import { LogView } from './views/LogView';
 import { ProgressView } from './views/ProgressView';
 import { SettingsDialog } from './views/SettingsDialog';
+import { startSync } from './sync/controller';
 
 type View = 'log' | 'history' | 'progress' | 'exercises' | 'templates';
 
@@ -84,7 +85,7 @@ function Shell({ migrated }: { migrated: MigrationInfo | null }) {
   );
 
   const loadDraft = () => getDraft(db).then((d) => setDraftState(d));
-  useEffect(() => { loadDraft(); }, []);
+  useEffect(() => { loadDraft(); void startSync(); }, []);
 
   // The draft lives in React state while editing and is saved on every change, so closing the
   // app mid-workout loses nothing.
